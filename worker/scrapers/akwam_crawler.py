@@ -341,16 +341,25 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                             await db.commit()
                             await db.refresh(season)
 
-                        # Create Episode
-                        episode = Episode(
-                            season_id=season.id,
-                            episode_number=episode_num,
-                            title=item_title,
-                            source_url=item_url
+                        # Find or create Episode
+                        stmt_ep = select(Episode).where(
+                            Episode.season_id == season.id,
+                            Episode.episode_number == episode_num
                         )
-                        db.add(episode)
-                        await db.commit()
-                        await db.refresh(episode)
+                        episode = (await db.execute(stmt_ep)).scalars().first()
+                        if not episode:
+                            episode = Episode(
+                                season_id=season.id,
+                                episode_number=episode_num,
+                                title=item_title,
+                                source_url=item_url
+                            )
+                            db.add(episode)
+                            await db.commit()
+                            await db.refresh(episode)
+                        else:
+                            episode.source_url = item_url
+                            await db.commit()
 
                         # Resolve streaming links from Akwam download/watch pages
                         streams = resolve_akwam_streams(item_url)
