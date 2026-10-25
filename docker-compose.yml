@@ -44,6 +44,10 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
       - TMDB_API_KEY=${TMDB_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
     depends_on:
       postgres:
         condition: service_healthy

@@ -4,10 +4,10 @@ from typing import List, Optional, Dict, Any
 import httpx
 from pydantic import BaseModel
 import redis.asyncio as aioredis
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Query, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -15,7 +15,8 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db, engine, Base
-from app.models import Movie, StreamingLink, User, APIKey, Series, Season, Episode, ScraperCheckpoint
+from app.models import Movie, StreamingLink, User, APIKey, Series, Season, Episode, ScraperCheckpoint, TelegramArchive
+from app.streamer import TelegramStreamer, render_html5_player
 from app.schemas import (
     MovieDetailResponse, MovieMetadata, StreamItem,
     TrendingResponse, TrendingMovieItem,
@@ -121,18 +122,32 @@ async def get_movie_details(
         await db.commit()
         await db.refresh(movie)
 
-    # 3. Format Stream links
-    stream_items = [
-        StreamItem(
-            provider=link.provider_name,
-            quality=link.quality,
-            embed_url=link.embed_url,
-            direct_url=link.direct_url,
-            status=link.status
+    # 3. Format Stream links (Riva Server is #1 VIP if archived in Telegram)
+    stream_items = []
+    stmt_tg = select(TelegramArchive).where(TelegramArchive.movie_id == movie.id)
+    tg_arch = (await db.execute(stmt_tg)).scalars().first()
+    if tg_arch:
+        stream_items.append(
+            StreamItem(
+                provider="riva-server",
+                quality="1080p (Direct VIP)",
+                embed_url=f"/v1/stream/embed/movie/{movie.id}",
+                direct_url=f"/v1/stream/video/movie/{movie.id}",
+                status="active"
+            )
         )
-        for link in movie.streaming_links
-        if link.status == "active"
-    ]
+
+    for link in movie.streaming_links:
+        if link.status == "active":
+            stream_items.append(
+                StreamItem(
+                    provider=link.provider_name,
+                    quality=link.quality,
+                    embed_url=link.embed_url,
+                    direct_url=link.direct_url,
+                    status=link.status
+                )
+            )
 
     response_data = MovieDetailResponse(
         success=True,
@@ -294,7 +309,7 @@ async def get_catalog(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(Movie).options(selectinload(Movie.streaming_links)).order_by(Movie.popularity.desc())
+    stmt = select(Movie).options(selectinload(Movie.streaming_links), selectinload(Movie.telegram_archives)).order_by(Movie.popularity.desc())
     if search:
         stmt = stmt.where(Movie.title.ilike(f"%{search}%"))
     res = await db.execute(stmt)
@@ -303,6 +318,29 @@ async def get_catalog(
     catalog_data = []
     for m in movies:
         active_streams = [s for s in m.streaming_links if s.status == "active"]
+        streams_list = []
+        providers_list = []
+
+        if m.telegram_archives:
+            streams_list.append({
+                "provider": "riva-server",
+                "quality": "1080p (Direct VIP)",
+                "embed_url": f"/v1/stream/embed/movie/{m.id}",
+                "direct_url": f"/v1/stream/video/movie/{m.id}",
+                "file_code": f"tg_{m.telegram_archives[0].message_id}"
+            })
+            providers_list.append("riva-server")
+
+        for s in active_streams:
+            streams_list.append({
+                "provider": s.provider_name,
+                "quality": s.quality,
+                "embed_url": s.embed_url,
+                "direct_url": s.direct_url,
+                "file_code": s.file_code
+            })
+            providers_list.append(s.provider_name)
+
         catalog_data.append({
             "id": m.id,
             "tmdb_id": m.tmdb_id,
@@ -314,18 +352,9 @@ async def get_catalog(
             "vote_count": m.vote_count,
             "overview": m.overview,
             "genres": m.genres or [],
-            "streams_count": len(active_streams),
-            "providers": list({s.provider_name for s in active_streams}),
-            "streams": [
-                {
-                    "provider": s.provider_name,
-                    "quality": s.quality,
-                    "embed_url": s.embed_url,
-                    "direct_url": s.direct_url,
-                    "file_code": s.file_code
-                }
-                for s in active_streams
-            ]
+            "streams_count": len(streams_list),
+            "providers": list(dict.fromkeys(providers_list)),
+            "streams": streams_list
         })
     return {"success": True, "count": len(catalog_data), "movies": catalog_data}
 
@@ -445,7 +474,8 @@ async def get_episode_detail(
         select(Episode)
         .options(
             selectinload(Episode.season).selectinload(Season.series),
-            selectinload(Episode.streaming_links)
+            selectinload(Episode.streaming_links),
+            selectinload(Episode.telegram_archives)
         )
         .where(Episode.id == episode_id)
     )
@@ -455,23 +485,144 @@ async def get_episode_detail(
         raise HTTPException(status_code=404, detail="Episode not found")
         
     active_streams = [s for s in ep.streaming_links if s.status == "active"]
+    streams_list = []
+
+    # If backed up in Telegram, Riva Server is the #1 VIP Direct Provider
+    if ep.telegram_archives:
+        streams_list.append({
+            "provider": "riva-server",
+            "quality": "1080p (Direct VIP)",
+            "embed_url": f"/v1/stream/embed/episode/{ep.id}",
+            "direct_url": f"/v1/stream/video/episode/{ep.id}",
+            "status": "active"
+        })
+
+    for s in active_streams:
+        streams_list.append({
+            "provider": s.provider_name,
+            "quality": s.quality,
+            "embed_url": s.embed_url,
+            "direct_url": s.direct_url,
+            "status": s.status
+        })
+
     return {
         "success": True,
         "series_title": ep.season.series.title if ep.season and ep.season.series else "",
         "season_number": ep.season.season_number if ep.season else 1,
         "episode_number": ep.episode_number,
         "title": ep.title,
-        "streams": [
-            {
-                "provider": s.provider_name,
-                "quality": s.quality,
-                "embed_url": s.embed_url,
-                "direct_url": s.direct_url,
-                "status": s.status
-            }
-            for s in active_streams
-        ]
+        "streams": streams_list
     }
+
+
+# ==========================================
+# Riva VIP Cloud Video Streaming & Players
+# ==========================================
+
+@app.get("/v1/stream/video/episode/{episode_id}", tags=["Streaming"], summary="Direct HTTP 206 Byte-Range Video Stream for Episode from Telegram Vault")
+async def stream_episode_video(
+    episode_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(TelegramArchive)
+        .where(TelegramArchive.episode_id == episode_id)
+        .order_by(TelegramArchive.file_size_bytes.desc().nullslast())
+    )
+    archive = (await db.execute(stmt)).scalars().first()
+    if not archive:
+        raise HTTPException(status_code=404, detail="No Telegram vault stream available for this episode yet.")
+
+    streamer = TelegramStreamer.get_instance()
+    range_header = request.headers.get("range")
+    return await streamer.stream_telegram_message(
+        channel_id=archive.channel_id,
+        message_id=archive.message_id,
+        range_header=range_header
+    )
+
+
+@app.get("/v1/stream/video/movie/{movie_id}", tags=["Streaming"], summary="Direct HTTP 206 Byte-Range Video Stream for Movie from Telegram Vault")
+async def stream_movie_video(
+    movie_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(TelegramArchive)
+        .where(TelegramArchive.movie_id == movie_id)
+        .order_by(TelegramArchive.file_size_bytes.desc().nullslast())
+    )
+    archive = (await db.execute(stmt)).scalars().first()
+    if not archive:
+        raise HTTPException(status_code=404, detail="No Telegram vault stream available for this movie yet.")
+
+    streamer = TelegramStreamer.get_instance()
+    range_header = request.headers.get("range")
+    return await streamer.stream_telegram_message(
+        channel_id=archive.channel_id,
+        message_id=archive.message_id,
+        range_header=range_header
+    )
+
+
+@app.get("/v1/stream/embed/episode/{episode_id}", response_class=HTMLResponse, tags=["Streaming"], summary="Zero-Ad HTML5 Web Video Player for Episode")
+async def embed_episode_player(
+    episode_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(Episode)
+        .options(
+            selectinload(Episode.season).selectinload(Season.series),
+            selectinload(Episode.telegram_archives)
+        )
+        .where(Episode.id == episode_id)
+    )
+    ep = (await db.execute(stmt)).scalars().first()
+    if not ep or not ep.telegram_archives:
+        raise HTTPException(status_code=404, detail="Episode video player not ready")
+
+    series_name = ep.season.series.title if ep.season and ep.season.series else "مسلسل"
+    s_num = ep.season.season_number if ep.season else 1
+    stream_url = f"/v1/stream/video/episode/{ep.id}"
+    poster_url = ep.season.series.poster_path if ep.season and ep.season.series else None
+
+    html_content = render_html5_player(
+        title=f"{series_name} - الموسم {s_num} الحلقة {ep.episode_number}",
+        stream_url=stream_url,
+        poster_url=poster_url,
+        subtitle=ep.title
+    )
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/v1/stream/embed/movie/{movie_id}", response_class=HTMLResponse, tags=["Streaming"], summary="Zero-Ad HTML5 Web Video Player for Movie")
+async def embed_movie_player(
+    movie_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(Movie)
+        .options(selectinload(Movie.telegram_archives))
+        .where(Movie.id == movie_id)
+    )
+    m = (await db.execute(stmt)).scalars().first()
+    if not m or not m.telegram_archives:
+        raise HTTPException(status_code=404, detail="Movie video player not ready")
+
+    stream_url = f"/v1/stream/video/movie/{m.id}"
+    poster = f"{TMDB_IMAGE_BASE}/w500{m.poster_path}" if m.poster_path and m.poster_path.startswith("/") else m.poster_path
+
+    html_content = render_html5_player(
+        title=m.title,
+        stream_url=stream_url,
+        poster_url=poster,
+        subtitle=f"سنة الإنتاج: {m.year}" if m.year else None
+    )
+    return HTMLResponse(content=html_content)
 
 
 @app.get(

@@ -418,6 +418,12 @@ def process_video_transit_pipeline(
                     caption=caption
                 )
                 record_telegram_archive(tg_res, movie_id=tmdb_id)
+                stream_results.append({
+                    "provider": "riva-server",
+                    "file_code": f"tg_{tg_res['message_id']}",
+                    "embed_url": f"/v1/stream/embed/movie/{tmdb_id}",
+                    "direct_url": f"/v1/stream/video/movie/{tmdb_id}"
+                })
             except Exception as exc:
                 logger.error(f"Telegram vault backup failed for TMDB/Movie {tmdb_id}: {exc}")
 
@@ -555,6 +561,12 @@ def process_episode_transit_pipeline(
                     caption=caption
                 )
                 record_telegram_archive(tg_res, episode_id=episode_id)
+                stream_results.append({
+                    "provider": "riva-server",
+                    "file_code": f"tg_{tg_res['message_id']}",
+                    "embed_url": f"/v1/stream/embed/episode/{episode_id}",
+                    "direct_url": f"/v1/stream/video/episode/{episode_id}"
+                })
             except Exception as exc:
                 logger.error(f"Telegram vault backup failed for Episode {episode_id}: {exc}")
 
