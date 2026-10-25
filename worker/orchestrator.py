@@ -41,7 +41,7 @@ def get_current_stats():
         }
 
 
-def run_forever():
+async def run_forever():
     logger.info("Starting Riva 24/7 Autopilot Orchestrator...")
     send_telegram_notification(
         "🚀 <b>تم تفعيل محرك Riva Autopilot المتكامل (العمل التلقائي 24/7):</b>\n"
@@ -58,16 +58,16 @@ def run_forever():
             for cat_key, cat_info in AKWAM_CATEGORIES.items():
                 logger.info(f"Orchestrator crawling Akwam: {cat_info['name']} ({cat_key})")
                 try:
-                    asyncio.run(crawl_akwam_category(cat_key, max_pages=3))
+                    await crawl_akwam_category(cat_key, max_pages=3)
                 except Exception as akwam_err:
                     logger.error(f"Error in Akwam category {cat_key}: {akwam_err}")
-                time.sleep(2.0)
+                await asyncio.sleep(2.0)
 
             # 2. Crawl Cima4u (Secondary Source)
             for cat_key, cat_info in CIMA_CATEGORIES.items():
                 logger.info(f"Orchestrator crawling Cima4u: {cat_info['name']} ({cat_key})")
                 try:
-                    asyncio.run(crawl_cima_category(cat_key, max_pages=2))
+                    await crawl_cima_category(cat_key, max_pages=2)
                 except Exception as cat_err:
                     err_text = str(cat_err)
                     logger.error(f"Error in Cima4u category {cat_key}: {cat_err}")
@@ -76,7 +76,7 @@ def run_forever():
                             f"<b>تنبيه حظر/حماية على قسم {cat_info['name']}:</b>\n<code>{err_text[:200]}</code>\nسيتم التخطي للقسم التالي.",
                             level="ban"
                         )
-                time.sleep(2.0)
+                await asyncio.sleep(2.0)
 
             # 3. Dispatch any pending items in DB that haven't been uploaded yet
             dispatched = dispatch_pending_episodes(limit=50)
@@ -98,7 +98,7 @@ def run_forever():
 
             cycle_count += 1
             logger.info("Cycle completed. Sleeping 5 minutes before next round...")
-            time.sleep(300)  # Wait 10 minutes before next round
+            await asyncio.sleep(300)
 
         except Exception as exc:
             logger.critical(f"Orchestrator encountered critical loop error: {exc}")
@@ -106,8 +106,8 @@ def run_forever():
                 f"<b>تنبيه عطل في المحرك الرئيسي:</b>\n<code>{str(exc)[:300]}</code>\nسيتم إعادة التشغيل الذاتي خلال 60 ثانية.",
                 level="error"
             )
-            time.sleep(60)
+            await asyncio.sleep(60)
 
 
 if __name__ == "__main__":
-    run_forever()
+    asyncio.run(run_forever())
