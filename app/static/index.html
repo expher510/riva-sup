@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Riva VOD Engine - Marvel Cinematic Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080c14;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #e50914;
+      --primary-hover: #ff1e27;
+      --accent-cyan: #00f2fe;
+      --accent-blue: #4facfe;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --glass-panel: rgba(15, 23, 42, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(229, 9, 20, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(0, 242, 254, 0.08) 0%, transparent 45%);
+      color: var(--text-main);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* Top Navbar */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 2.5rem;
+      background: rgba(8, 12, 20, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--primary), #990000);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.25rem;
+      box-shadow: 0 0 20px rgba(229, 9, 20, 0.4);
+    }
+
+    .brand-title {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-title span {
+      color: var(--primary);
+    }
+
+    .b2b-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+      color: var(--accent-cyan);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .key-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      padding: 0.4rem 0.9rem;
+      border-radius: 30px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .btn-api-docs {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 0.45rem 1rem;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-api-docs:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      box-shadow: 0 0 15px rgba(229, 9, 20, 0.4);
+    }
+
+    /* Hero Banner */
+    .hero {
+      padding: 3rem 2.5rem 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .hero-content {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.7));
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem 3rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .hero-content::after {
+      content: "";
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 450px;
+      height: 450px;
+      background: radial-gradient(circle, rgba(229, 9, 20, 0.2) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 0.8rem;
+    }
+
+    .hero-title {
+      font-size: 2.6rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+      background: linear-gradient(180deg, #ffffff 40%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      color: var(--text-muted);
+      max-width: 750px;
+      font-size: 1.05rem;
+      margin-bottom: 1.8rem;
+    }
+
+    .hero-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .metric-label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Search & Filter Bar */
+    .controls-section {
+      max-width: 1400px;
+      margin: 2rem auto 1.5rem;
+      padding: 0 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 480px;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1.2rem 0.85rem 2.8rem;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 15px rgba(229, 9, 20, 0.25);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .catalog-count {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    /* Movies Grid */
+    .movies-grid {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2.5rem 4rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.8rem;
+    }
+
+    .movie-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .movie-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(229, 9, 20, 0.5);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(229, 9, 20, 0.15);
+    }
+
+    .poster-container {
+      position: relative;
+      width: 100%;
+      padding-top: 150%; /* 2:3 aspect ratio */
+      background: #111827;
+      overflow: hidden;
+    }
+
+    .poster-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+
+    .movie-card:hover .poster-img {
+      transform: scale(1.05);
+    }
+
+    .rating-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fbbf24;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .streams-indicator {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(16, 185, 129, 0.9);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .card-body {
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .movie-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.35rem;
+    }
+
+    .movie-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .providers-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: auto;
+    }
+
+    .provider-tag {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      text-transform: capitalize;
+    }
+
+    .provider-tag.doodstream {
+      border-color: rgba(0, 242, 254, 0.3);
+      color: var(--accent-cyan);
+    }
+
+    .provider-tag.streamtape {
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #f59e0b;
+    }
+
+    /* Modal Player & API Inspector */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .modal-container {
+      background: #0f172a;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 1050px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 1.75rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .modal-title-box h3 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .modal-title-box p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .btn-close {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #fff;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .btn-close:hover {
+      background: var(--primary);
+    }
+
+    /* Video Player Box */
+    .player-section {
+      background: #000;
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 */
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .player-iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .player-controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 1.75rem;
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .stream-selector {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+    }
+
+    .stream-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: #cbd5e1;
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .stream-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(229, 9, 20, 0.4);
+    }
+
+    /* Modal Tabs (Overview vs B2B JSON) */
+    .modal-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--card-border);
+      padding: 0 1.75rem;
+      background: rgba(15, 23, 42, 0.5);
+    }
+
+    .tab-btn {
+      padding: 0.85rem 1.25rem;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+    }
+
+    .tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--primary);
+    }
+
+    .modal-body {
+      padding: 1.5rem 1.75rem;
+    }
+
+    .overview-content {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .overview-text {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* JSON Inspector */
+    .json-inspector-box {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .json-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .json-pre {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-sm);
+      padding: 1.2rem;
+      color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 1rem 1.25rem;
+      }
+      .hero {
+        padding: 1.5rem 1.25rem;
+      }
+      .hero-content {
+        padding: 1.5rem;
+      }
+      .hero-title {
+        font-size: 1.8rem;
+      }
+      .controls-section {
+        padding: 0 1.25rem;
+      }
+      .movies-grid {
+        padding: 0 1.25rem 3rem;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <nav class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-logo">R</div>
+      <div class="brand-title">RIVA<span>.VOD</span><span class="b2b-badge">B2B ENGINE</span></div>
+    </a>
+    <div class="nav-actions">
+      <div class="key-badge">
+        <span class="status-dot"></span>
+        <span>Key: <strong style="color:#fff;">Enterprise Tier</strong></span>
+      </div>
+      <a href="/docs" target="_blank" class="btn-api-docs">Interactive API Docs</a>
+    </div>
+  </nav>
+
+  <!-- Hero Banner -->
+  <header class="hero">
+    <div class="hero-content">
+      <div class="hero-tag">Marvel Cinematic Universe &bull; B2B Live Demo</div>
+      <h1 class="hero-title">High-Performance VOD Metadata & Stream Engine</h1>
+      <p class="hero-desc">
+        Complete TMDB metadata aggregated with ready-to-stream embed links from external cyberlockers 
+        (DoodStream & Streamtape). Monetized via RESTful API with tiered rate limiting.
+      </p>
+      <div class="hero-metrics">
+        <div class="metric-item">
+          <span class="metric-value" id="stat-movies">10</span>
+          <span class="metric-label">Marvel Movies</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-value" id="stat-streams">20</span>
+          <span class="metric-label">Active Embed Streams</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-value" style="color: #10b981;">0 MB</span>
+          <span class="metric-label">VPS Bandwidth (Remote Upload)</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-value" style="color: var(--accent-cyan);">&lt; 15 ms</span>
+          <span class="metric-label">Redis Cache Latency</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Search & Filter Bar -->
+  <section class="controls-section">
+    <div class="search-box">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="searchInput" class="search-input" placeholder="Search Marvel movies (e.g. Avengers, Iron Man, Spider-Man)...">
+    </div>
+    <div class="catalog-count" id="catalogCount">Showing 10 Movies</div>
+  </section>
+
+  <!-- Movies Grid -->
+  <main class="movies-grid" id="moviesGrid">
+    <!-- Movie Cards dynamically injected here -->
+  </main>
+
+  <!-- Modal Player & API Inspector -->
+  <div class="modal-backdrop" id="movieModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <h3 id="modalTitle">Movie Title</h3>
+          <p id="modalSub"><span id="modalYear">2021</span> &bull; <span id="modalRating">&#9733; 8.4</span> &bull; TMDB ID: <span id="modalTmdbId">299536</span></p>
+        </div>
+        <button class="btn-close" id="btnCloseModal">&times;</button>
+      </div>
+
+      <!-- Player Frame -->
+      <div class="player-section">
+        <iframe id="videoIframe" class="player-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+      </div>
+
+      <!-- Stream Selector Bar -->
+      <div class="player-controls-bar">
+        <div class="stream-selector" id="streamButtons">
+          <!-- Switch between DoodStream and Streamtape -->
+        </div>
+        <a id="btnExternalWatch" href="#" target="_blank" class="stream-btn" style="color: var(--accent-cyan); border-color: rgba(0, 242, 254, 0.4);">
+          Open Direct Link &rarr;
+        </a>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" id="tabOverview">Overview & Synopsis</button>
+        <button class="tab-btn" id="tabJson">B2B API JSON Inspector</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Tab 1: Overview -->
+        <div class="overview-content" id="overviewPanel">
+          <p class="overview-text" id="modalOverview">Movie overview description...</p>
+          <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;" id="modalGenres">
+            <!-- Genre tags -->
+          </div>
+        </div>
+
+        <!-- Tab 2: JSON Inspector -->
+        <div class="json-inspector-box" id="jsonPanel">
+          <div class="json-header">
+            <span>Payload from endpoint: <code style="color:#fff;">GET /v1/movies/{id}</code></span>
+            <span style="color:#10b981;">HTTP 200 OK (Cached)</span>
+          </div>
+          <pre class="json-pre" id="jsonOutput">// Loading API JSON...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allMovies = [];
+    let currentMovie = null;
+    let currentActiveStream = null;
+
+    const DEMO_API_KEY = "riva_live_marvel_demo_enterprise_key";
+
+    // Fetch movies from catalog
+    async function loadCatalog() {
+      try {
+        const res = await fetch("/v1/catalog");
+        const data = await res.json();
+        allMovies = data.movies || [];
+        renderMovies(allMovies);
+        document.getElementById("stat-movies").textContent = allMovies.length;
+        let totalStreams = 0;
+        allMovies.forEach(m => totalStreams += (m.streams ? m.streams.length : 0));
+        document.getElementById("stat-streams").textContent = totalStreams;
+      } catch (err) {
+        console.error("Failed to load catalog:", err);
+      }
+    }
+
+    function renderMovies(movies) {
+      const grid = document.getElementById("moviesGrid");
+      grid.innerHTML = "";
+      document.getElementById("catalogCount").textContent = `Showing ${movies.length} Movies`;
+
+      if (movies.length === 0) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #94a3b8;">No movies matched your search query.</div>`;
+        return;
+      }
+
+      movies.forEach(movie => {
+        const card = document.createElement("div");
+        card.className = "movie-card";
+        card.onclick = () => openMovie(movie);
+
+        const providersHtml = (movie.streams || []).map(s => 
+          `<span class="provider-tag ${s.provider}">${s.provider} ${s.quality}</span>`
+        ).join("");
+
+        card.innerHTML = `
+          <div class="poster-container">
+            <img class="poster-img" src="${movie.poster || 'https://via.placeholder.com/300x450'}" alt="${movie.title}" loading="lazy">
+            <div class="rating-badge">&#9733; ${movie.rating}</div>
+            <div class="streams-indicator">&#9658; ${movie.streams_count} Streams</div>
+          </div>
+          <div class="card-body">
+            <h4 class="movie-title" title="${movie.title}">${movie.title}</h4>
+            <div class="movie-meta">
+              <span>${movie.year || 'N/A'}</span>
+              <span>&bull;</span>
+              <span>${(movie.genres || []).slice(0, 2).join(', ')}</span>
+            </div>
+            <div class="providers-tags">
+              ${providersHtml}
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Open Modal Player & Load API Response
+    async function openMovie(movie) {
+      currentMovie = movie;
+      document.getElementById("modalTitle").textContent = movie.title;
+      document.getElementById("modalYear").textContent = movie.year || "N/A";
+      document.getElementById("modalRating").innerHTML = `&#9733; ${movie.rating}`;
+      document.getElementById("modalTmdbId").textContent = movie.tmdb_id;
+      document.getElementById("modalOverview").textContent = movie.overview || "No overview available.";
+      
+      const genresDiv = document.getElementById("modalGenres");
+      genresDiv.innerHTML = (movie.genres || []).map(g => `<span class="provider-tag" style="color:#cbd5e1;">${g}</span>`).join("");
+
+      // Render Stream buttons
+      const streamButtonsDiv = document.getElementById("streamButtons");
+      streamButtonsDiv.innerHTML = "";
+
+      if (movie.streams && movie.streams.length > 0) {
+        // Prioritize working stream like hd-trailer first for immediate playback
+        const sortedStreams = [...movie.streams].sort((a, b) => {
+          if (a.provider === 'hd-trailer') return -1;
+          if (b.provider === 'hd-trailer') return 1;
+          return 0;
+        });
+
+        sortedStreams.forEach((stream, idx) => {
+          const btn = document.createElement("button");
+          btn.className = `stream-btn ${idx === 0 ? 'active' : ''}`;
+          btn.innerHTML = `&#9654; ${stream.provider.toUpperCase()} (${stream.quality})`;
+          btn.onclick = () => switchStream(stream, btn);
+          streamButtonsDiv.appendChild(btn);
+        });
+        switchStream(sortedStreams[0], streamButtonsDiv.children[0]);
+      } else {
+        streamButtonsDiv.innerHTML = `<span style="font-size:0.85rem; color:#9ca3af;">No active streams available.</span>`;
+        document.getElementById("videoIframe").src = "";
+      }
+
+      // Fetch Real B2B API Response for JSON Inspector
+      fetchB2bApiResponse(movie.tmdb_id);
+
+      // Show Modal
+      document.getElementById("movieModal").style.display = "flex";
+      setTab("overview");
+    }
+
+    function switchStream(stream, btnElement) {
+      currentActiveStream = stream;
+      document.querySelectorAll(".stream-btn").forEach(b => b.classList.remove("active"));
+      if (btnElement) btnElement.classList.add("active");
+
+      document.getElementById("videoIframe").src = stream.embed_url;
+      const extBtn = document.getElementById("btnExternalWatch");
+      extBtn.href = stream.embed_url;
+      extBtn.style.display = "inline-flex";
+    }
+
+    async function fetchB2bApiResponse(tmdbId) {
+      const jsonPre = document.getElementById("jsonOutput");
+      jsonPre.textContent = "// Requesting GET /v1/movies/" + tmdbId + " with X-API-Key...";
+      try {
+        const res = await fetch(`/v1/movies/${tmdbId}`, {
+          headers: {
+            "X-API-Key": DEMO_API_KEY
+          }
+        });
+        const data = await res.json();
+        jsonPre.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        jsonPre.textContent = "// Error fetching API response: " + err;
+      }
+    }
+
+    // Tab Switching
+    function setTab(tab) {
+      const tabOverview = document.getElementById("tabOverview");
+      const tabJson = document.getElementById("tabJson");
+      const overviewPanel = document.getElementById("overviewPanel");
+      const jsonPanel = document.getElementById("jsonPanel");
+
+      if (tab === "overview") {
+        tabOverview.classList.add("active");
+        tabJson.classList.remove("active");
+        overviewPanel.style.display = "flex";
+        jsonPanel.style.display = "none";
+      } else {
+        tabOverview.classList.remove("active");
+        tabJson.classList.add("active");
+        overviewPanel.style.display = "none";
+        jsonPanel.style.display = "flex";
+      }
+    }
+
+    document.getElementById("tabOverview").onclick = () => setTab("overview");
+    document.getElementById("tabJson").onclick = () => setTab("json");
+
+    // Close Modal
+    function closeModal() {
+      document.getElementById("movieModal").style.display = "none";
+      document.getElementById("videoIframe").src = ""; // Stop audio/video
+    }
+
+    document.getElementById("btnCloseModal").onclick = closeModal;
+    document.getElementById("movieModal").onclick = (e) => {
+      if (e.target.id === "movieModal") closeModal();
+    };
+
+    // Search filter
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const filtered = allMovies.filter(m => 
+        m.title.toLowerCase().includes(q) || 
+        (m.genres && m.genres.some(g => g.toLowerCase().includes(q)))
+      );
+      renderMovies(filtered);
+    });
+
+    // Initialize
+    loadCatalog();
+  </script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: riva_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-riva_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-riva_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-riva_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-riva_user} -d ${POSTGRES_DB:-riva_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - riva_internal_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: riva_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secure_password}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secure_password}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - riva_internal_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riva_api
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips="*"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      - TMDB_API_KEY=${TMDB_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8090:8000"
+    networks:
+      - riva_internal_net
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riva_worker
+    restart: unless-stopped
+    command: celery -A worker.celery_app.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
+      - SYNC_DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - DOODSTREAM_API_KEY=${DOODSTREAM_API_KEY}
+      - STREAMTAPE_API_LOGIN=${STREAMTAPE_API_LOGIN}
+      - STREAMTAPE_API_KEY=${STREAMTAPE_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TRANSIT_TEMP_DIR=/tmp/riva_transit
+    volumes:
+      - transit_scratch:/tmp/riva_transit
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - riva_internal_net
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riva_orchestrator
+    restart: unless-stopped
+    command: python -m worker.orchestrator
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
+      - SYNC_DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - DOODSTREAM_API_KEY=${DOODSTREAM_API_KEY}
+      - STREAMTAPE_API_LOGIN=${STREAMTAPE_API_LOGIN}
+      - STREAMTAPE_API_KEY=${STREAMTAPE_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TRANSIT_TEMP_DIR=/tmp/riva_transit
+    volumes:
+      - transit_scratch:/tmp/riva_transit
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - riva_internal_net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  transit_scratch:
+    driver: local
+
+networks:
+  riva_internal_net:
+    driver: bridge
