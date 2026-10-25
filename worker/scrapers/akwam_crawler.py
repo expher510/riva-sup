@@ -240,6 +240,7 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
         else:
             cp = ScraperCheckpoint(
                 category_slug=checkpoint_slug,
+                category_name=f"أكوام - {cat_info['name']}",
                 current_page=1,
                 total_pages=50,
                 status="running"
