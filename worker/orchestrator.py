@@ -13,7 +13,7 @@ from app.config import settings
 from worker.telegram_vault import send_telegram_notification
 from worker.scrapers.cima4u_crawler import CATEGORIES as CIMA_CATEGORIES, crawl_category as crawl_cima_category
 from worker.scrapers.akwam_crawler import CATEGORIES as AKWAM_CATEGORIES, crawl_akwam_category
-from worker.batch_dispatcher import dispatch_pending_episodes
+from worker.batch_dispatcher import dispatch_pending_episodes, dispatch_pending_movies
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("riva_orchestrator")
@@ -79,8 +79,9 @@ async def run_forever():
                 await asyncio.sleep(2.0)
 
             # 3. Dispatch any pending items in DB that haven't been uploaded yet
-            dispatched = dispatch_pending_episodes(limit=50)
-            logger.info(f"Cycle #{cycle_count} dispatched {dispatched} pending tasks to Celery.")
+            dispatched_eps = dispatch_pending_episodes(limit=50)
+            dispatched_movies = dispatch_pending_movies(limit=50)
+            logger.info(f"Cycle #{cycle_count} dispatched {dispatched_eps} episodes and {dispatched_movies} movies to Celery.")
 
             # 4. Send periodic stats to Telegram every 2 cycles
             stats = get_current_stats()

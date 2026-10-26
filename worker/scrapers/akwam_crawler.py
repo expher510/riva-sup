@@ -103,10 +103,14 @@ ARABIC_ORDINALS = {
 }
 
 
-def parse_series_title(raw_text: str):
-    text = unquote(raw_text).replace('-', ' ')
+def parse_series_title(raw_text: str, item_url: str = ""):
+    slug = unquote(item_url.strip('/').split('/')[-1]).replace('-', ' ') if item_url else ""
+    # If raw_text is too short or generic, fallback to URL slug
+    text = raw_text.strip() if len(raw_text.strip()) > 8 and raw_text.strip() not in ["مشاهدة", "تحميل", "مشاهدة وتحميل"] else (slug or raw_text)
+    text = unquote(text).replace('-', ' ')
+
     season_num = 1
-    s_match = re.search(r'الموسم\s+([^\s]+)', text)
+    s_match = re.search(r'(?:الموسم|الجزء)\s+([^\s]+)', text)
     if s_match:
         val = s_match.group(1).strip()
         season_num = ARABIC_ORDINALS.get(val, int(val) if val.isdigit() else 1)
@@ -121,8 +125,8 @@ def parse_series_title(raw_text: str):
     if y_match:
         year = int(y_match.group(1))
 
-    clean = re.sub(r'^(?:مشاهدة\s+)?مسلسل\s+', '', text, flags=re.I)
-    clean = re.sub(r'الموسم\s+[^\s]+', '', clean)
+    clean = re.sub(r'^(?:مشاهدة\s+)?(?:مسلسل|انمي|برنامج)\s+', '', text, flags=re.I)
+    clean = re.sub(r'(?:الموسم|الجزء)\s+[^\s]+', '', clean)
     clean = re.sub(r'الحلقة\s+\d+', '', clean)
     clean = re.sub(r'\b(19\d{2}|20\d{2})\b', '', clean)
     clean = re.sub(r'\b(?:مترجم|مترجمة|مدبلج|مدبلجة|اون\s+لاين|HD|كاملة?|مت|متر|والاخيرة|الاخيرة)\b', '', clean, flags=re.I)
@@ -130,14 +134,17 @@ def parse_series_title(raw_text: str):
     return clean or "مسلسل", season_num, ep_num, year
 
 
-def parse_movie_title(raw_text: str):
-    text = unquote(raw_text).replace('-', ' ')
+def parse_movie_title(raw_text: str, item_url: str = ""):
+    slug = unquote(item_url.strip('/').split('/')[-1]).replace('-', ' ') if item_url else ""
+    text = raw_text.strip() if len(raw_text.strip()) > 8 and raw_text.strip() not in ["مشاهدة", "تحميل", "مشاهدة وتحميل"] else (slug or raw_text)
+    text = unquote(text).replace('-', ' ')
+
     year = None
     y_match = re.search(r'\b(19\d{2}|20\d{2})\b', text)
     if y_match:
         year = int(y_match.group(1))
 
-    clean = re.sub(r'^(?:مشاهدة\s+)?فيلم\s+', '', text, flags=re.I)
+    clean = re.sub(r'^(?:مشاهدة\s+)?(?:فيلم|انمي)\s+', '', text, flags=re.I)
     clean = re.sub(r'\b(19\d{2}|20\d{2})\b', '', clean)
     clean = re.sub(r'\b(?:مترجم|مترجمة|مدبلج|مدبلجة|اون\s+لاين|HD|كامل|تحميل)\b', '', clean, flags=re.I)
     clean = re.sub(r'\s+', ' ', clean).strip(' -:|/')
@@ -296,8 +303,10 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                 if not any(k in h for k in ['/category/', '/page/', '/tag/', '/login', '/logout', '/profile', '/favorite', '/dmca', '/ad-policy']):
                     clean_text = re.sub(r'<[^>]+>', ' ', inner).strip()
                     clean_text = re.sub(r'\s+', ' ', clean_text)
-                    if len(clean_text) > 3 and h not in unique_items:
-                        unique_items[h] = clean_text
+                    if len(clean_text) > 2:
+                        # Prefer longer, informative text over generic thumbnail alt "مشاهدة"
+                        if h not in unique_items or (len(clean_text) > len(unique_items[h]) and unique_items[h] in ["مشاهدة", "تحميل", "مشاهدة وتحميل"]):
+                            unique_items[h] = clean_text
 
             logger.info(f"Akwam Page {page} discovered {len(unique_items)} unique items.")
 
@@ -309,7 +318,7 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                         if (await db.execute(stmt_chk)).scalar():
                             continue
 
-                        series_title, season_num, episode_num, s_year = parse_series_title(item_title)
+                        series_title, season_num, episode_num, s_year = parse_series_title(item_title, item_url=item_url)
 
                         # Find or create Series
                         stmt_s = select(Series).where(Series.title == series_title)
@@ -351,15 +360,17 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                             episode = Episode(
                                 season_id=season.id,
                                 episode_number=episode_num,
-                                title=item_title,
+                                title=f"الحلقة {episode_num}",
                                 source_url=item_url
                             )
                             db.add(episode)
                             await db.commit()
                             await db.refresh(episode)
                         else:
-                            episode.source_url = item_url
-                            await db.commit()
+                            # If episode already exists for this season & number, don't overwrite if from different source
+                            if episode.source_url != item_url and episode.source_url:
+                                logger.info(f"Skipping duplicate episode slot for S{season_num}E{episode_num} of {series_title}")
+                                continue
 
                         # Resolve streaming links from Akwam download/watch pages
                         streams = resolve_akwam_streams(item_url)
@@ -378,13 +389,13 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                         logger.info(f"  + Added [{cat_info['cat_code']}] {series_title} S{season_num}E{episode_num} ({len(streams)} streams)")
                         items_added_on_page += 1
 
-                        # Dispatch transit pipeline to download & upload to Telegram + cyberlockers
-                        direct_stream = next((s["direct_url"] for s in streams if s.get("direct_url")), None)
-                        if direct_stream:
+                        # Dispatch transit pipeline with ALL available direct stream candidates
+                        direct_streams = [s["direct_url"] for s in streams if s.get("direct_url")]
+                        if direct_streams:
                             try:
                                 from worker.pipeline import process_episode_transit_pipeline
-                                process_episode_transit_pipeline.delay(episode.id, direct_stream, quality="1080p")
-                                logger.info(f"  🚀 Dispatched transit pipeline for Episode {episode.id}")
+                                process_episode_transit_pipeline.delay(episode.id, direct_streams, quality="1080p")
+                                logger.info(f"  🚀 Dispatched transit pipeline for Episode {episode.id} with {len(direct_streams)} candidate links")
                             except Exception as pipe_err:
                                 logger.warning(f"Could not dispatch transit pipeline for episode: {pipe_err}")
 
@@ -394,7 +405,7 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                         if (await db.execute(stmt_m)).scalar():
                             continue
 
-                        movie_title, m_year = parse_movie_title(item_title)
+                        movie_title, m_year = parse_movie_title(item_title, item_url=item_url)
                         movie = Movie(
                             title=movie_title,
                             source_url=item_url,
@@ -421,12 +432,13 @@ async def crawl_akwam_category(cat_key: str, max_pages: Optional[int] = 5):
                         logger.info(f"  + Added [{cat_info['cat_code']} Movie] {movie_title} ({len(streams)} streams)")
                         items_added_on_page += 1
 
-                        direct_stream = next((s["direct_url"] for s in streams if s.get("direct_url")), None)
-                        if direct_stream:
+                        # Dispatch transit pipeline with ALL available direct stream candidates
+                        direct_streams = [s["direct_url"] for s in streams if s.get("direct_url")]
+                        if direct_streams:
                             try:
                                 from worker.pipeline import process_video_transit_pipeline
-                                process_video_transit_pipeline.delay(movie.id, direct_stream, quality="1080p")
-                                logger.info(f"  🚀 Dispatched transit pipeline for Movie {movie.id}")
+                                process_video_transit_pipeline.delay(movie.id, direct_streams, quality="1080p")
+                                logger.info(f"  🚀 Dispatched transit pipeline for Movie {movie.id} with {len(direct_streams)} candidate links")
                             except Exception as pipe_err:
                                 logger.warning(f"Could not dispatch transit pipeline for movie: {pipe_err}")
 

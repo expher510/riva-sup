@@ -748,13 +748,13 @@ async def ingest_episode(req: IngestEpisodeRequest, db: AsyncSession = Depends(g
             db.add(link)
     await db.commit()
 
-    # 5. Dispatch transit pipeline if direct stream is available
+    # 5. Dispatch transit pipeline with all available stream candidate links (fallback chain)
     dispatched = False
-    direct_stream = next((s.direct_url for s in req.streams if s.direct_url), None)
-    if direct_stream:
+    candidate_streams = [s.direct_url for s in req.streams if s.direct_url]
+    if candidate_streams:
         try:
             from worker.pipeline import process_episode_transit_pipeline
-            process_episode_transit_pipeline.delay(episode.id, direct_stream, quality="1080p")
+            process_episode_transit_pipeline.delay(episode.id, candidate_streams, quality="1080p")
             dispatched = True
         except Exception:
             pass
@@ -762,7 +762,8 @@ async def ingest_episode(req: IngestEpisodeRequest, db: AsyncSession = Depends(g
     return {
         "success": True,
         "episode_id": episode.id,
-        "dispatched_to_worker": dispatched
+        "dispatched_to_worker": dispatched,
+        "candidate_streams_count": len(candidate_streams)
     }
 
 
@@ -803,11 +804,11 @@ async def ingest_movie(req: IngestMovieRequest, db: AsyncSession = Depends(get_d
     await db.commit()
 
     dispatched = False
-    direct_stream = next((s.direct_url for s in req.streams if s.direct_url), None)
-    if direct_stream:
+    candidate_streams = [s.direct_url for s in req.streams if s.direct_url]
+    if candidate_streams:
         try:
             from worker.pipeline import process_video_transit_pipeline
-            process_video_transit_pipeline.delay(movie.id, direct_stream, quality="1080p")
+            process_video_transit_pipeline.delay(movie.id, candidate_streams, quality="1080p")
             dispatched = True
         except Exception:
             pass
@@ -815,7 +816,8 @@ async def ingest_movie(req: IngestMovieRequest, db: AsyncSession = Depends(get_d
     return {
         "success": True,
         "movie_id": movie.id,
-        "dispatched_to_worker": dispatched
+        "dispatched_to_worker": dispatched,
+        "candidate_streams_count": len(candidate_streams)
     }
 
 

@@ -25,13 +25,12 @@ SyncSession = sessionmaker(bind=sync_engine, autoflush=False, autocommit=False)
 
 def dispatch_pending_episodes(limit: int = 50) -> int:
     """
-    Finds episodes that have direct HLS streams but no Telegram archive yet,
-    and dispatches them to Celery.
+    Finds episodes that have direct streams but no Telegram archive yet,
+    and dispatches them to Celery with all candidate stream URLs.
     """
     with SyncSession() as session:
-        # Find distinct episodes with direct stream that aren't yet in telegram_archives
         query = text("""
-            SELECT DISTINCT ON (e.id) e.id, sl.direct_url, e.title
+            SELECT e.id, e.title, array_agg(DISTINCT sl.direct_url) as candidate_urls
             FROM episodes e
             JOIN streaming_links sl ON sl.episode_id = e.id
             WHERE sl.direct_url IS NOT NULL 
@@ -39,6 +38,7 @@ def dispatch_pending_episodes(limit: int = 50) -> int:
               AND e.id NOT IN (
                   SELECT episode_id FROM telegram_archives WHERE episode_id IS NOT NULL
               )
+            GROUP BY e.id, e.title
             ORDER BY e.id ASC
             LIMIT :lim;
         """)
@@ -50,13 +50,52 @@ def dispatch_pending_episodes(limit: int = 50) -> int:
 
         logger.info(f"Found {len(rows)} pending episodes to dispatch to Celery.")
         count = 0
-        for ep_id, direct_url, title in rows:
+        for ep_id, title, candidate_urls in rows:
             try:
-                task = process_episode_transit_pipeline.delay(ep_id, direct_url, quality="1080p")
-                logger.info(f"  🚀 Dispatched Ep {ep_id} [{title[:30]}] -> Celery Task ID: {task.id}")
+                task = process_episode_transit_pipeline.delay(ep_id, candidate_urls, quality="1080p")
+                logger.info(f"  🚀 Dispatched Ep {ep_id} [{title[:30]}] ({len(candidate_urls)} candidate links) -> Celery Task ID: {task.id}")
                 count += 1
             except Exception as e:
                 logger.error(f"Failed to dispatch Ep {ep_id}: {e}")
+
+        return count
+
+
+def dispatch_pending_movies(limit: int = 50) -> int:
+    """
+    Finds movies that have direct streams but no Telegram archive yet,
+    and dispatches them to Celery with all candidate stream URLs.
+    """
+    with SyncSession() as session:
+        query = text("""
+            SELECT m.id, m.title, array_agg(DISTINCT sl.direct_url) as candidate_urls
+            FROM movies m
+            JOIN streaming_links sl ON sl.movie_id = m.id
+            WHERE sl.direct_url IS NOT NULL 
+              AND sl.direct_url != ''
+              AND m.id NOT IN (
+                  SELECT movie_id FROM telegram_archives WHERE movie_id IS NOT NULL
+              )
+            GROUP BY m.id, m.title
+            ORDER BY m.id ASC
+            LIMIT :lim;
+        """)
+        rows = session.execute(query, {"lim": limit}).fetchall()
+
+        if not rows:
+            logger.info("No pending movies found to dispatch.")
+            return 0
+
+        logger.info(f"Found {len(rows)} pending movies to dispatch to Celery.")
+        count = 0
+        from worker.pipeline import process_video_transit_pipeline
+        for m_id, title, candidate_urls in rows:
+            try:
+                task = process_video_transit_pipeline.delay(m_id, candidate_urls, quality="1080p")
+                logger.info(f"  🚀 Dispatched Movie {m_id} [{title[:30]}] ({len(candidate_urls)} candidate links) -> Celery Task ID: {task.id}")
+                count += 1
+            except Exception as e:
+                logger.error(f"Failed to dispatch Movie {m_id}: {e}")
 
         return count
 

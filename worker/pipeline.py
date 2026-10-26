@@ -3,7 +3,7 @@ import shutil
 import logging
 import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Union
 import httpx
 import requests
 from sqlalchemy import create_engine, select
@@ -44,17 +44,34 @@ def check_disk_space_available(directory: str, required_bytes: int = MIN_FREE_DI
 
 def download_media_source(url: str, output_path: Path):
     """
-    Downloads media file: uses FFmpeg if m3u8 playlist, or httpx chunked stream if direct file.
+    Downloads media file:
+    1. Resolves cyberlocker/host URLs (DoodStream, Playmogo, Streamtape, Mixdrop) to real direct video streams.
+    2. Streams download with browser headers to prevent 403 Forbidden / Cloudflare blocks.
+    3. Handles HLS m3u8 playlists via FFmpeg remuxer.
     """
     import subprocess
-    if ".m3u8" in url or "hls" in url:
+    from worker.media_resolver import resolve_stream_to_direct_url, BROWSER_UA
+
+    # Resolve direct downloadable CDN/MP4 stream URL
+    direct_url = resolve_stream_to_direct_url(url)
+    logger.info(f"Target stream URL for download: {direct_url[:80]}...")
+
+    headers = {
+        "User-Agent": BROWSER_UA,
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Referer": "https://playmogo.com/" if ("playmogo" in direct_url or "dood" in direct_url) else "https://akwams.org/"
+    }
+
+    if ".m3u8" in direct_url or "hls" in direct_url:
         logger.info(f"Detected HLS m3u8 stream. Using FFmpeg remuxer to download: {output_path.name}")
         cmd = [
             "ffmpeg", "-y",
+            "-user_agent", BROWSER_UA,
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
-            "-i", url,
+            "-i", direct_url,
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",
             str(output_path)
@@ -63,10 +80,13 @@ def download_media_source(url: str, output_path: Path):
         if res.returncode != 0:
             raise RuntimeError(f"FFmpeg download error: {res.stderr.decode('utf-8', errors='replace')[-300:]}")
     else:
-        with httpx.stream("GET", url, timeout=900.0, follow_redirects=True) as stream:
+        with httpx.stream("GET", direct_url, headers=headers, timeout=900.0, follow_redirects=True) as stream:
             stream.raise_for_status()
+            c_type = stream.headers.get("content-type", "").lower()
+            if "text/html" in c_type:
+                raise RuntimeError(f"Stream returned HTML instead of video content ({c_type})")
             with open(output_path, "wb") as f:
-                for chunk in stream.iter_bytes(chunk_size=1024 * 1024 * 8):
+                for chunk in stream.iter_bytes(chunk_size=1024 * 1024 * 4):
                     f.write(chunk)
 
 
@@ -338,14 +358,12 @@ def upsert_movie_and_streams_sync(
 def process_video_transit_pipeline(
     self,
     tmdb_id: int,
-    source_download_url: str,
+    source_download_url: Union[str, List[str]],
     quality: str = "1080p"
 ):
     """
     Strict Transit Pipeline: Download -> Upload to Cyberlockers & Telegram -> Immediate Deletion.
-    
-    GUARANTEE: The temporary video file is ALWAYS deleted in the `finally` block,
-    regardless of whether uploads succeed, fail, or encounter timeouts.
+    Supports a fallback chain of multiple candidate stream links. If one fails, it tries the rest.
     """
     transit_root = Path(settings.TRANSIT_TEMP_DIR)
     transit_root.mkdir(parents=True, exist_ok=True)
@@ -380,13 +398,36 @@ def process_video_transit_pipeline(
             except Exception as e:
                 logger.warning(f"TMDB API fetch failed for {tmdb_id}: {e}")
 
-        # 3. Stream chunked download into temporary VPS directory
-        local_video_file = task_temp_dir / f"{tmdb_id}_{quality}.mp4"
-        logger.info(f"Downloading source video from: {source_download_url} to {local_video_file}")
-        download_media_source(source_download_url, local_video_file)
+        # 3. Stream chunked download from candidate URLs (Multi-Link Fallback Chain)
+        candidate_urls = [source_download_url] if isinstance(source_download_url, str) else list(source_download_url)
+        candidate_urls = list(dict.fromkeys([u for u in candidate_urls if u]))
 
-        file_size_mb = local_video_file.stat().st_size / (1024 * 1024)
-        logger.info(f"Download complete: {local_video_file.name} ({file_size_mb:.2f} MB)")
+        local_video_file = task_temp_dir / f"{tmdb_id}_{quality}.mp4"
+        download_success = False
+        last_dl_error = None
+
+        for idx, cand_url in enumerate(candidate_urls, 1):
+            logger.info(f"Trying stream candidate {idx}/{len(candidate_urls)} for Movie {tmdb_id}: {cand_url}")
+            try:
+                download_media_source(cand_url, local_video_file)
+                if local_video_file.exists() and local_video_file.stat().st_size > 500 * 1024:
+                    download_success = True
+                    file_size_mb = local_video_file.stat().st_size / (1024 * 1024)
+                    logger.info(f"Stream candidate {idx} SUCCEEDED! ({file_size_mb:.2f} MB)")
+                    break
+                else:
+                    sz = local_video_file.stat().st_size if local_video_file.exists() else 0
+                    logger.warning(f"Stream candidate {idx} produced invalid file ({sz} bytes). Trying next candidate...")
+                    if local_video_file.exists():
+                        local_video_file.unlink(missing_ok=True)
+            except Exception as dl_err:
+                last_dl_error = dl_err
+                logger.warning(f"Stream candidate {idx} failed: {dl_err}. Trying next candidate...")
+                if local_video_file.exists():
+                    local_video_file.unlink(missing_ok=True)
+
+        if not download_success:
+            raise RuntimeError(f"All {len(candidate_urls)} stream candidates failed for Movie {tmdb_id}. Last error: {last_dl_error}")
 
         # 4. Upload to remote cyberlockers
         # Primary: DoodStream
@@ -499,12 +540,13 @@ def upsert_episode_streams_sync(
 def process_episode_transit_pipeline(
     self,
     episode_id: int,
-    source_download_url: str,
+    source_download_url: Union[str, List[str]],
     quality: str = "1080p"
 ):
     """
     Downloads source episode video on VPS, uploads to DoodStream & Streamtape,
     and immediately deletes local file to preserve disk space.
+    Supports a fallback chain of multiple candidate stream links.
     """
     transit_root = Path(settings.TRANSIT_TEMP_DIR)
     transit_root.mkdir(parents=True, exist_ok=True)
@@ -525,12 +567,36 @@ def process_episode_transit_pipeline(
     logger.info(f"Starting episode transit pipeline for Episode ID: {episode_id} in {task_temp_dir}")
 
     try:
-        local_video_file = task_temp_dir / f"ep_{episode_id}_{quality}.mp4"
-        logger.info(f"Downloading source video from: {source_download_url} to {local_video_file}")
-        download_media_source(source_download_url, local_video_file)
+        # 3. Stream chunked download from candidate URLs (Multi-Link Fallback Chain)
+        candidate_urls = [source_download_url] if isinstance(source_download_url, str) else list(source_download_url)
+        candidate_urls = list(dict.fromkeys([u for u in candidate_urls if u]))
 
-        file_size_mb = local_video_file.stat().st_size / (1024 * 1024)
-        logger.info(f"Download complete: {local_video_file.name} ({file_size_mb:.2f} MB)")
+        local_video_file = task_temp_dir / f"ep_{episode_id}_{quality}.mp4"
+        download_success = False
+        last_dl_error = None
+
+        for idx, cand_url in enumerate(candidate_urls, 1):
+            logger.info(f"Trying stream candidate {idx}/{len(candidate_urls)} for Episode {episode_id}: {cand_url}")
+            try:
+                download_media_source(cand_url, local_video_file)
+                if local_video_file.exists() and local_video_file.stat().st_size > 500 * 1024:
+                    download_success = True
+                    file_size_mb = local_video_file.stat().st_size / (1024 * 1024)
+                    logger.info(f"Stream candidate {idx} SUCCEEDED! ({file_size_mb:.2f} MB)")
+                    break
+                else:
+                    sz = local_video_file.stat().st_size if local_video_file.exists() else 0
+                    logger.warning(f"Stream candidate {idx} produced invalid file ({sz} bytes). Trying next candidate...")
+                    if local_video_file.exists():
+                        local_video_file.unlink(missing_ok=True)
+            except Exception as dl_err:
+                last_dl_error = dl_err
+                logger.warning(f"Stream candidate {idx} failed: {dl_err}. Trying next candidate...")
+                if local_video_file.exists():
+                    local_video_file.unlink(missing_ok=True)
+
+        if not download_success:
+            raise RuntimeError(f"All {len(candidate_urls)} stream candidates failed for Episode {episode_id}. Last error: {last_dl_error}")
 
         # Upload to DoodStream
         if settings.DOODSTREAM_API_KEY:

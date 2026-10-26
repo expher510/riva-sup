@@ -57,6 +57,10 @@ vps_*.py
 check_*.py
 test_*.py
 probe_*.py
+inspect_*.py
+deploy_*.py
+run_*.py
+*.txt
 deploy_to_vps.py
 trigger_episode_upload.py
 inspect_cdn.py

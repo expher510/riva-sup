@@ -396,13 +396,13 @@ async def crawl_category(
                             logger.info(f"  + Added [{cat_info['cat_code']}] {series_title} S{season_num}E{episode_num} ({len(streams)} streams)")
                             items_added_on_page += 1
 
-                            # Dispatch transit pipeline to download & upload to Telegram + cyberlockers
-                            direct_stream = next((s["direct_url"] for s in streams if s.get("direct_url")), None)
-                            if direct_stream:
+                            # Dispatch transit pipeline with ALL available direct stream candidates
+                            direct_streams = [s["direct_url"] for s in streams if s.get("direct_url")]
+                            if direct_streams:
                                 try:
                                     from worker.pipeline import process_episode_transit_pipeline
-                                    process_episode_transit_pipeline.delay(episode.id, direct_stream, quality="1080p")
-                                    logger.info(f"  🚀 Dispatched transit pipeline for Episode {episode.id} (Telegram + Cyberlockers)")
+                                    process_episode_transit_pipeline.delay(episode.id, direct_streams, quality="1080p")
+                                    logger.info(f"  🚀 Dispatched transit pipeline for Episode {episode.id} with {len(direct_streams)} candidate links")
                                 except Exception as pipe_err:
                                     logger.warning(f"Could not dispatch transit pipeline for episode: {pipe_err}")
 
@@ -438,13 +438,13 @@ async def crawl_category(
                             logger.info(f"  + Added [{cat_info['cat_code']} Movie] {item_title} ({len(streams)} streams)")
                             items_added_on_page += 1
 
-                            # Dispatch transit pipeline to download & upload to Telegram + cyberlockers
-                            direct_stream = next((s["direct_url"] for s in streams if s.get("direct_url")), None)
-                            if direct_stream:
+                            # Dispatch transit pipeline with ALL available direct stream candidates
+                            direct_streams = [s["direct_url"] for s in streams if s.get("direct_url")]
+                            if direct_streams:
                                 try:
                                     from worker.pipeline import process_video_transit_pipeline
-                                    process_video_transit_pipeline.delay(movie.id, direct_stream, quality="1080p")
-                                    logger.info(f"  🚀 Dispatched transit pipeline for Movie {movie.id} (Telegram + Cyberlockers)")
+                                    process_video_transit_pipeline.delay(movie.id, direct_streams, quality="1080p")
+                                    logger.info(f"  🚀 Dispatched transit pipeline for Movie {movie.id} with {len(direct_streams)} candidate links")
                                 except Exception as pipe_err:
                                     logger.warning(f"Could not dispatch transit pipeline for movie: {pipe_err}")
 
