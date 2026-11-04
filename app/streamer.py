@@ -7,7 +7,7 @@ import os
 import re
 import asyncio
 import logging
-from typing import Optional, Tuple, AsyncGenerator
+from typing import Optional, Tuple, AsyncGenerator, List, Dict, Any
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from telethon import TelegramClient
@@ -251,6 +251,236 @@ def render_html5_player(
         }});
         player.on('pause', () => {{ header.style.opacity = '1'; }});
         player.on('seeking', () => {{ header.style.opacity = '1'; }});
+    </script>
+</body>
+</html>
+"""
+
+
+def render_multi_server_player(
+    title: str,
+    servers: List[Dict[str, Any]],
+    subtitle: Optional[str] = None,
+    poster_url: Optional[str] = None
+) -> str:
+    """
+    Renders an all-in-one VIP Multi-Server player:
+    - If a direct VIP stream exists (Telegram Vault), plays in high-performance Plyr HTML5.
+    - If external mirror servers exist (HGCloud, Playmogo, Mixdrop, etc.), embeds them in a zero-ad sandboxed iframe.
+    - Provides sleek server switcher tabs at the top for instant fallback across servers.
+    """
+    import json
+    servers_json = json.dumps(servers, ensure_ascii=False)
+    first_server = servers[0] if servers else {"embed_url": "", "is_direct": False, "name": "افتراضي"}
+
+    buttons_html = ""
+    for idx, s in enumerate(servers):
+        active_cls = "active" if idx == 0 else ""
+        icon = "⚡" if s.get("is_direct") else "🎬"
+        s_name = s.get("name") or s.get("provider", f"سيرفر {idx+1}")
+        buttons_html += f'<button class="server-btn {active_cls}" onclick="switchServer({idx})" id="sbtn-{idx}">{icon} {s_name}</button>\n'
+
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Riva Cinema Player</title>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {{
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #09090b;
+            --surface: #18181b;
+            --border: #27272a;
+            --text: #f4f4f5;
+        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Cairo', -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }}
+        .top-navbar {{
+            height: 60px;
+            background: rgba(18, 18, 23, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 50;
+        }}
+        .meta-info {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        .brand-badge {{
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: white;
+            font-weight: 900;
+            font-size: 13px;
+            padding: 4px 12px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }}
+        .title-text {{
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            max-width: 500px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .subtitle-text {{
+            font-size: 13px;
+            color: #a1a1aa;
+        }}
+        .servers-bar {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            max-width: 60%;
+            padding-bottom: 2px;
+        }}
+        .servers-bar::-webkit-scrollbar {{ height: 4px; }}
+        .servers-bar::-webkit-scrollbar-thumb {{ background: #3f3f46; border-radius: 4px; }}
+        .server-btn {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: #d4d4d8;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }}
+        .server-btn:hover {{
+            background: #27272a;
+            border-color: #52525b;
+            color: #fff;
+        }}
+        .server-btn.active {{
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+        }}
+        .player-container {{
+            flex: 1;
+            width: 100vw;
+            height: calc(100vh - 60px);
+            position: relative;
+            background: #000;
+        }}
+        #videoFrame {{
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }}
+        #directPlayerWrap {{
+            width: 100%;
+            height: 100%;
+            display: none;
+        }}
+        video {{
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }}
+    </style>
+</head>
+<body>
+    <header class="top-navbar">
+        <div class="meta-info">
+            <span class="brand-badge">RIVA</span>
+            <div>
+                <div class="title-text">{title}</div>
+                {f'<div class="subtitle-text">{subtitle}</div>' if subtitle else ''}
+            </div>
+        </div>
+        <div class="servers-bar">
+            {buttons_html}
+        </div>
+    </header>
+
+    <main class="player-container">
+        <!-- Iframe for cyberlocker / embed mirror player -->
+        <iframe id="videoFrame" src="{first_server.get('embed_url')}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+
+        <!-- Native Plyr player for direct VIP stream -->
+        <div id="directPlayerWrap">
+            <video id="nativePlayer" playsinline controls>
+                <source id="videoSource" src="" type="video/mp4" />
+            </video>
+        </div>
+    </main>
+
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+    <script>
+        const SERVERS = {servers_json};
+        let plyrInstance = null;
+
+        function switchServer(index) {{
+            if (!SERVERS || index < 0 || index >= SERVERS.length) return;
+            const target = SERVERS[index];
+
+            // Update active button state
+            document.querySelectorAll('.server-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('sbtn-' + index);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const iframe = document.getElementById('videoFrame');
+            const directWrap = document.getElementById('directPlayerWrap');
+
+            if (target.is_direct) {{
+                iframe.style.display = 'none';
+                iframe.src = 'about:blank';
+                directWrap.style.display = 'block';
+
+                if (!plyrInstance) {{
+                    plyrInstance = new Plyr('#nativePlayer', {{
+                        autoplay: true,
+                        seekTime: 10,
+                        controls: ['play-large', 'restart', 'rewind', 'play', 'fast-forward', 'progress', 'current-time', 'duration', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen']
+                    }});
+                }}
+                document.getElementById('videoSource').src = target.embed_url;
+                document.getElementById('nativePlayer').load();
+                document.getElementById('nativePlayer').play();
+            }} else {{
+                if (plyrInstance) {{
+                    plyrInstance.pause();
+                }}
+                directWrap.style.display = 'none';
+                iframe.style.display = 'block';
+                iframe.src = target.embed_url;
+            }}
+        }}
+
+        // Initialize first server
+        if (SERVERS.length > 0 && SERVERS[0].is_direct) {{
+            switchServer(0);
+        }}
     </script>
 </body>
 </html>

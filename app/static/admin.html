@@ -1,0 +1,2514 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة متابعة بوت Riva الحية | التزام الشروط وتفصيل التفاعل</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #070b14;
+      --bg-card: rgba(15, 23, 42, 0.88);
+      --bg-card-hover: rgba(23, 35, 62, 0.95);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.17);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.14);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.14);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --purple: #8b5cf6;
+      --purple-bg: rgba(139, 92, 246, 0.14);
+      --cyan: #06b6d4;
+      --cyan-bg: rgba(6, 182, 212, 0.14);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(circle at 12% 10%, rgba(59, 130, 246, 0.13), transparent 38%),
+        radial-gradient(circle at 88% 18%, rgba(16, 185, 129, 0.10), transparent 40%),
+        radial-gradient(circle at 50% 90%, rgba(139, 92, 246, 0.09), transparent 45%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .mono { font-family: 'JetBrains Mono', monospace; direction: ltr; display: inline-block; }
+
+    /* Login Overlay */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(7, 11, 20, 0.96);
+      backdrop-filter: blur(18px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 430px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 22px;
+      padding: 2.2rem 1.8rem;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      text-align: center;
+    }
+
+    .login-logo {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 1rem;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #2563eb, #10b981);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #fff;
+      box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35);
+    }
+
+    .login-box h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .login-box p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.4rem; }
+
+    .input-field {
+      width: 100%;
+      padding: 0.78rem 1rem;
+      border-radius: 12px;
+      border: 1px solid var(--border-strong);
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-field:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.58rem 1.05rem;
+      border-radius: 11px;
+      border: 1px solid transparent;
+      font-family: inherit;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      color: #fff;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35); }
+    .btn-ghost { background: rgba(255, 255, 255, 0.05); border-color: var(--border-strong); color: #e2e8f0; }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.11); }
+    .btn-success { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
+    .btn-success:hover:not(:disabled) { background: rgba(16, 185, 129, 0.28); }
+    .btn-danger { background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.35); color: #f87171; }
+
+    .err-msg { color: #f87171; font-size: 0.86rem; margin-top: 0.75rem; min-height: 1.3rem; }
+
+    /* Top Navbar */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      background: rgba(7, 11, 20, 0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, #2563eb, #10b981);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.2rem;
+    }
+    .brand h2 { font-size: 1.1rem; font-weight: 800; }
+    .brand small { display: block; color: var(--text-muted); font-size: 0.75rem; }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.32rem 0.8rem;
+      border-radius: 999px;
+      background: var(--green-bg);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .topbar-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+    .container {
+      max-width: 1460px;
+      margin: 0 auto;
+      padding: 1.3rem 1.2rem 3.2rem;
+    }
+
+    /* Toast / Banner */
+    #toast-banner {
+      display: none;
+      margin-bottom: 1.1rem;
+      padding: 0.85rem 1.15rem;
+      border-radius: 13px;
+      background: rgba(16, 185, 129, 0.16);
+      border: 1px solid rgba(16, 185, 129, 0.42);
+      color: #6ee7b7;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 0.95rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.18s, border-color 0.18s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+
+    .kpi-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.83rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+    .kpi-icon {
+      width: 35px; height: 35px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.08rem;
+    }
+    .kpi-val { font-size: 1.85rem; font-weight: 800; line-height: 1.15; margin-bottom: 0.35rem; }
+    .kpi-sub { font-size: 0.77rem; color: var(--text-muted); display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.18rem 0.58rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+    .badge-green { background: var(--green-bg); color: #34d399; border: 1px solid rgba(16,185,129,0.32); }
+    .badge-red { background: var(--red-bg); color: #f87171; border: 1px solid rgba(239,68,68,0.32); }
+    .badge-amber { background: var(--amber-bg); color: #fbbf24; border: 1px solid rgba(245,158,11,0.32); }
+    .badge-purple { background: var(--purple-bg); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.32); }
+    .badge-blue { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.32); }
+    .badge-cyan { background: var(--cyan-bg); color: #22d3ee; border: 1px solid rgba(6,182,212,0.32); }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-size: 1.02rem; font-weight: 800; display: flex; align-items: center; gap: 0.45rem; }
+
+    /* Funnel & Rules Compliance Section */
+    .compliance-section {
+      margin-bottom: 1.3rem;
+    }
+
+    .verdict-banner {
+      background: linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(16, 185, 129, 0.12));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 13px;
+      padding: 0.85rem 1.1rem;
+      margin-bottom: 1.05rem;
+      font-size: 0.9rem;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    .funnel-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.85rem;
+      margin-bottom: 1.15rem;
+    }
+    @media (max-width: 1050px) { .funnel-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 580px) { .funnel-grid { grid-template-columns: 1fr; } }
+
+    .funnel-step {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      padding: 1rem 1.05rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      position: relative;
+    }
+    .funnel-step:hover {
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+      border-color: var(--primary);
+    }
+    .funnel-step-num {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .funnel-step-title { font-size: 0.92rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .funnel-step-val { font-size: 1.65rem; font-weight: 800; line-height: 1.15; margin-bottom: 0.35rem; }
+    .funnel-bar-bg {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 0.45rem;
+    }
+    .funnel-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .funnel-sub { font-size: 0.76rem; color: var(--text-muted); display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+    /* Sub-grid inside compliance: Per-Channel Bars + Global Interaction Breakdown */
+    .compliance-subgrid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 960px) { .compliance-subgrid { grid-template-columns: 1fr; } }
+
+    .sub-box {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem;
+    }
+    .sub-box-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ch-row {
+      margin-bottom: 0.7rem;
+    }
+    .ch-row:last-child { margin-bottom: 0; }
+    .ch-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.83rem;
+      margin-bottom: 0.28rem;
+      gap: 0.5rem;
+    }
+    .ch-head a { color: #93c5fd; text-decoration: none; font-weight: 700; }
+    .ch-head a:hover { text-decoration: underline; }
+
+    .interaction-pills-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.6rem;
+    }
+    .int-stat-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      transition: all 0.16s;
+    }
+    .int-stat-box:hover { border-color: var(--primary); background: rgba(59, 130, 246, 0.08); }
+    .int-stat-num { font-size: 1.28rem; font-weight: 800; line-height: 1.2; }
+    .int-stat-lbl { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+    /* Middle Analytics Row */
+    .mid-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 1.1rem;
+      margin-bottom: 1.3rem;
+    }
+    @media (max-width: 980px) { .mid-grid { grid-template-columns: 1fr; } }
+
+    /* 7-Day Bar Chart */
+    .chart-wrap {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.6rem;
+      align-items: end;
+      height: 170px;
+      padding-top: 0.8rem;
+    }
+    .chart-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      gap: 0.35rem;
+    }
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 120px;
+      width: 100%;
+      justify-content: center;
+    }
+    .bar {
+      width: 13px;
+      min-height: 4px;
+      border-radius: 5px 5px 2px 2px;
+      transition: height 0.35s ease;
+    }
+    .bar-join { background: linear-gradient(180deg, #34d399, #059669); }
+    .bar-left { background: linear-gradient(180deg, #f87171, #dc2626); }
+    .chart-lbl { font-size: 0.74rem; color: var(--text-muted); }
+    .chart-nums { font-size: 0.7rem; display: flex; gap: 5px; }
+
+    /* Main Split: Users Table + Live Feed */
+    .main-split {
+      display: grid;
+      grid-template-columns: 1.85fr 1fr;
+      gap: 1.1rem;
+      align-items: start;
+    }
+    .aff-split {
+      display: grid;
+      grid-template-columns: 1fr 1.9fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    @media (max-width: 1180px) {
+      .main-split { grid-template-columns: 1fr; }
+      .aff-split { grid-template-columns: 1fr; }
+    }
+
+    /* Filter Tabs & Search */
+    .tabs { display: flex; gap: 0.38rem; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 0.4rem 0.78rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: #fff; border-color: var(--border-strong); }
+    .tab-btn.active {
+      background: rgba(59, 130, 246, 0.22);
+      border-color: rgba(59, 130, 246, 0.6);
+      color: #fff;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.95rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 210px;
+      padding: 0.55rem 0.9rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--primary); }
+
+    .select-box {
+      padding: 0.5rem 0.78rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: #0f172a;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.82rem;
+      outline: none;
+    }
+
+    /* Users Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th {
+      text-align: right;
+      font-size: 0.77rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      padding: 0.65rem 0.7rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.75rem 0.7rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+      font-size: 0.84rem;
+      vertical-align: middle;
+    }
+    tr.user-row { cursor: pointer; transition: background 0.14s; }
+    tr.user-row:hover td { background: rgba(59, 130, 246, 0.06); }
+
+    .user-cell { display: flex; align-items: center; gap: 0.6rem; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, #1e293b, #334155);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 0.9rem; color: #93c5fd;
+      flex-shrink: 0;
+    }
+    .user-name { font-weight: 700; color: #f1f5f9; }
+    .user-meta { font-size: 0.74rem; color: var(--text-muted); display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    .user-meta a { color: #60a5fa; text-decoration: none; }
+    .user-meta a:hover { text-decoration: underline; }
+
+    /* Clickable Interaction Button inside Table */
+    .interaction-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.34rem 0.72rem;
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.18));
+      border: 1px solid rgba(96, 165, 250, 0.45);
+      color: #bfdbfe;
+      font-family: inherit;
+      font-size: 0.79rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .interaction-btn:hover {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.36), rgba(139, 92, 246, 0.32));
+      color: #fff;
+      transform: scale(1.03);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.28);
+    }
+    .mini-breakdown {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.32rem;
+      font-size: 0.73rem;
+      color: #cbd5e1;
+    }
+    .mini-pill {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 0.08rem 0.42rem;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Live Feed & Upload Queue */
+    .feed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.58rem;
+      max-height: 600px;
+      overflow-y: auto;
+      padding-left: 4px;
+    }
+    .feed-item {
+      padding: 0.68rem 0.85rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.6rem;
+      transition: border-color 0.15s;
+    }
+    .feed-item.clickable { cursor: pointer; }
+    .feed-item.clickable:hover { border-color: rgba(96, 165, 250, 0.45); background: rgba(59, 130, 246, 0.05); }
+    .feed-title { font-size: 0.84rem; font-weight: 700; }
+    .feed-sub { font-size: 0.77rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .feed-time { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
+
+    .queue-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.28rem 0.62rem;
+      border-radius: 9px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      font-size: 0.76rem;
+      color: #93c5fd;
+      margin: 0.18rem;
+    }
+
+    /* User Interaction & Compliance Modal */
+    #user-detail-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 250;
+      background: rgba(4, 8, 16, 0.82);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-card {
+      width: 100%;
+      max-width: 820px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: #0d1527;
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      padding: 1.4rem 1.5rem;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7);
+    }
+    .modal-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .modal-story {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      font-size: 0.88rem;
+      margin-bottom: 1rem;
+      color: #e2e8f0;
+    }
+    .modal-stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      margin-bottom: 1.1rem;
+    }
+    @media (max-width: 640px) { .modal-stats-row { grid-template-columns: repeat(2, 1fr); } }
+    .modal-stat-card {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+    .modal-stat-card .num { font-size: 1.45rem; font-weight: 800; }
+    .modal-stat-card .lbl { font-size: 0.76rem; color: var(--text-muted); }
+
+    .modal-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 720px) { .modal-grid-2 { grid-template-columns: 1fr; } }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.52rem 0.75rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      margin-bottom: 0.45rem;
+      font-size: 0.83rem;
+    }
+    .watch-pill-item {
+      padding: 0.48rem 0.7rem;
+      border-radius: 9px;
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.26);
+      margin-bottom: 0.4rem;
+      font-size: 0.82rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Password Login Overlay -->
+  <div id="login-screen">
+    <form class="login-box" onsubmit="handleLogin(event)">
+      <div class="login-logo">R</div>
+      <h1>لوحة متابعة بوت Riva</h1>
+      <p>أدخل كلمة سر الأدمن لعرض التزام المشتركين بالشروط والجروبات وتفصيل تفاعل ومشاهدات كل مستخدم</p>
+      <input id="admin-pass-input" type="password" class="input-field" placeholder="كلمة سر الأدمن (نفس باسورد /admin)" required autofocus />
+      <div id="login-err" class="err-msg"></div>
+      <button id="login-btn" type="submit" class="btn btn-primary" style="width:100%; margin-top:0.5rem; padding:0.78rem;">
+        🔓 دخول إلى لوحة المتابعة
+      </button>
+    </form>
+  </div>
+
+  <!-- User Interaction & Compliance Modal -->
+  <div id="user-detail-modal" onclick="closeUserModalOnBackdrop(event)">
+    <div class="modal-card" id="user-modal-body">
+      <div style="text-align:center; padding:2.5rem; color:var(--text-muted);">جاري تحميل ملف تفاعل المستخدم...</div>
+    </div>
+  </div>
+
+  <!-- Dashboard Topbar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">R</div>
+      <div>
+        <h2>مركز متابعة بوت Riva السينمائي <span class="mono" style="font-size:0.82rem; color:#60a5fa;">@riva18_bot</span></h2>
+        <small id="last-sync-text">جاري المزامنة...</small>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="live-pill">
+        <span class="pulse-dot"></span>
+        <span id="auto-refresh-label">بث حي مباشر (10ث)</span>
+      </div>
+      <button id="notif-btn" class="btn btn-ghost" onclick="toggleNotifications()" title="تفعيل أو إيقاف إشعارات الدخول والخروج على تيليجرام">
+        🔔 الإشعارات: ...
+      </button>
+      <button id="scan-btn" class="btn btn-success" onclick="runSilentScan()" title="يفحص كل المستخدمين بصمت: من حظر البوت + من اشترك فعلياً في الجروبات الإجبارية">
+        🔍 فحص شامل (نشاط + جروبات)
+      </button>
+      <button class="btn btn-ghost" onclick="refreshAll(true)">🔄 تحديث الآن</button>
+      <button class="btn btn-danger" onclick="logoutAdmin()">خروج</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="toast-banner"></div>
+
+    <!-- Top KPI Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>المستخدمون الحاليون (النشطون)</span>
+          <div class="kpi-icon" style="background:var(--green-bg); color:#34d399;">🟢</div>
+        </div>
+        <div class="kpi-val" id="kpi-active" style="color:#34d399;">—</div>
+        <div class="kpi-sub">
+          <span class="badge badge-green" id="kpi-retention">نسبة البقاء —%</span>
+          <span id="kpi-online1h">نشط آخر ساعة: —</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>ملتزمون بالشروط والجروبات</span>
+          <div class="kpi-icon" style="background:var(--cyan-bg); color:#22d3ee;">✅</div>
+        </div>
+        <div class="kpi-val" id="kpi-compliant" style="color:#22d3ee;">—</div>
+        <div class="kpi-sub">
+          <span class="badge badge-cyan" id="kpi-compliance-pct">—% من المسجلين</span>
+          <span id="kpi-noncompliant-sub">غير مكتمل: —</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>دخلوا واتفرجوا فعلياً</span>
+          <div class="kpi-icon" style="background:var(--amber-bg); color:#fbbf24;">🍿</div>
+        </div>
+        <div class="kpi-val" id="kpi-watchers" style="color:#fbbf24;">—</div>
+        <div class="kpi-sub">
+          <span class="badge badge-amber" id="kpi-binge">🔥 كمّلوا المشاهدة: —</span>
+          <span id="kpi-total-watches">0 فيلم/حلقة</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>غادروا / حظروا البوت (اللي طلعوا)</span>
+          <div class="kpi-icon" style="background:var(--red-bg); color:#f87171;">🚪</div>
+        </div>
+        <div class="kpi-val" id="kpi-left" style="color:#f87171;">—</div>
+        <div class="kpi-sub">
+          <span class="badge badge-red" id="kpi-left-today">اليوم: 0</span>
+          <span id="kpi-joined-today-sub">جدد اليوم: +0</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>مكتبة الأرشيف المرفوعة بالبوت</span>
+          <div class="kpi-icon" style="background:var(--purple-bg); color:#c4b5fd;">🎬</div>
+        </div>
+        <div class="kpi-val" id="kpi-vault-main" style="color:#c4b5fd;">—</div>
+        <div class="kpi-sub">
+          <span class="badge badge-purple" id="kpi-up24h">+0 آخر 24س</span>
+          <span id="kpi-vault-gb">0 GB</span>
+        </div>
+      </div>
+
+      <div class="kpi-card" style="cursor:pointer; border-color:rgba(245, 158, 11, 0.35);" onclick="document.getElementById('affiliate-section-anchor').scrollIntoView({ behavior: 'smooth', block: 'start' })" title="اضغط للانتقال إلى لوحة تتبع الأفلييت والنقاط">
+        <div class="kpi-head">
+          <span>🎁 نظام الأفلييت والنقاط</span>
+          <div class="kpi-icon" style="background:var(--amber-bg); color:#fbbf24;">🏆</div>
+        </div>
+        <div class="kpi-val" id="kpi-aff-main" style="color:#fbbf24;">0 / 0</div>
+        <div class="kpi-sub">
+          <span class="badge badge-amber" id="kpi-aff-points">🏆 النقاط: 0</span>
+          <span id="kpi-aff-active">المسوقون: 0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- User Compliance & Watch Conversion Funnel Section -->
+    <section class="panel compliance-section">
+      <div class="panel-header">
+        <div class="panel-title">🧭 هل الناس بتتبع الشروط وتدخل الجروبات وتكمل مشاهدة؟ (اضغط على أي مرحلة لفلترة المستخدمين)</div>
+        <span class="badge badge-blue">تحديث حي مع كل ضغطة زر بالبوت</span>
+      </div>
+
+      <div class="verdict-banner" id="smart-verdict-box">
+        <span>💡 جاري تحليل سلوك المشتركين والتزامهم بالجروبات...</span>
+      </div>
+
+      <div class="funnel-grid">
+        <!-- Step 1 -->
+        <div class="funnel-step" onclick="jumpToUserFilter('all')">
+          <div class="funnel-step-num">
+            <span>المرحلة 1</span>
+            <span class="badge badge-blue">100%</span>
+          </div>
+          <div class="funnel-step-title">👥 دخلوا البوت</div>
+          <div class="funnel-step-val" id="fn-entered">—</div>
+          <div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:100%; background:#3b82f6;"></div></div>
+          <div class="funnel-sub">
+            <span id="fn-active-sub">نشط حالياً: —</span>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="funnel-step" onclick="jumpToUserFilter('compliant')">
+          <div class="funnel-step-num">
+            <span>المرحلة 2 (الشروط)</span>
+            <span class="badge badge-green" id="fn-comp-pct">0%</span>
+          </div>
+          <div class="funnel-step-title">✅ اتبعوا الشروط ودخلوا الجروبات</div>
+          <div class="funnel-step-val" style="color:#34d399;" id="fn-compliant">—</div>
+          <div class="funnel-bar-bg"><div class="funnel-bar-fill" id="fn-comp-bar" style="width:0%; background:#10b981;"></div></div>
+          <div class="funnel-sub" id="fn-comp-breakdown">
+            <span>⚠️ جزئي: 0</span> • <span>❌ لم يشترك: 0</span>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="funnel-step" onclick="jumpToUserFilter('watchers')">
+          <div class="funnel-step-num">
+            <span>المرحلة 3 (المشاهدة)</span>
+            <span class="badge badge-amber" id="fn-watch-pct">0%</span>
+          </div>
+          <div class="funnel-step-title">🍿 دخلوا واتفرجوا فعلياً</div>
+          <div class="funnel-step-val" style="color:#fbbf24;" id="fn-watchers">—</div>
+          <div class="funnel-bar-bg"><div class="funnel-bar-fill" id="fn-watch-bar" style="width:0%; background:#f59e0b;"></div></div>
+          <div class="funnel-sub">
+            <span>طلبوا فيلم أو حلقة واحدة على الأقل</span>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="funnel-step" onclick="jumpToUserFilter('binge')">
+          <div class="funnel-step-num">
+            <span>المرحلة 4 (الاستمرارية)</span>
+            <span class="badge badge-purple" id="fn-binge-pct">0%</span>
+          </div>
+          <div class="funnel-step-title">🔥 كمّلوا المشاهدة (+2 أعمال/حلقات)</div>
+          <div class="funnel-step-val" style="color:#c4b5fd;" id="fn-binge">—</div>
+          <div class="funnel-bar-bg"><div class="funnel-bar-fill" id="fn-binge-bar" style="width:0%; background:#8b5cf6;"></div></div>
+          <div class="funnel-sub">
+            <span>شاهدوا أكثر من فيلم أو أكملوا حلقات مسلسل</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="compliance-subgrid">
+        <!-- Per-Channel Compliance -->
+        <div class="sub-box">
+          <div class="sub-box-title">
+            <span>📢 نسبة التزام المستخدمين بكل جروب / قناة إجبارية</span>
+            <small style="color:var(--text-muted); font-weight:600;" id="req-ch-count-lbl">0 جروبات</small>
+          </div>
+          <div id="channels-compliance-list">
+            <div style="color:var(--text-muted); font-size:0.83rem;">جاري التحميل...</div>
+          </div>
+        </div>
+
+        <!-- Global Typed Interactions Explanation -->
+        <div class="sub-box">
+          <div class="sub-box-title">
+            <span>🎯 معنى التفاعلات في البوت (اضغط لفلترة السجل)</span>
+            <small style="color:var(--text-muted); font-weight:600;" id="global-clicks-lbl">إجمالي النقرات: —</small>
+          </div>
+          <div class="interaction-pills-grid">
+            <div class="int-stat-box" onclick="filterTimelineTo('watches')">
+              <div class="int-stat-num" style="color:#c4b5fd;" id="tot-movies-watched">0</div>
+              <div class="int-stat-lbl">🎬 أفلام شوهدت</div>
+            </div>
+            <div class="int-stat-box" onclick="filterTimelineTo('watches')">
+              <div class="int-stat-num" style="color:#60a5fa;" id="tot-eps-watched">0</div>
+              <div class="int-stat-lbl">📺 حلقات شوهدت</div>
+            </div>
+            <div class="int-stat-box" onclick="filterTimelineTo('search')">
+              <div class="int-stat-num" style="color:#fbbf24;" id="tot-searches">0</div>
+              <div class="int-stat-lbl">🔍 عمليات بحث</div>
+            </div>
+            <div class="int-stat-box" onclick="filterTimelineTo('browse')">
+              <div class="int-stat-num" style="color:#34d399;" id="tot-browses">0</div>
+              <div class="int-stat-lbl">📂 تصفح أقسام</div>
+            </div>
+            <div class="int-stat-box" onclick="filterTimelineTo('rules')">
+              <div class="int-stat-num" style="color:#f87171;" id="tot-rules-blocks">0</div>
+              <div class="int-stat-lbl">🚧 مرات حاجز الشروط</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Analytics + Pipeline Live Row -->
+    <section class="mid-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📈 حركة الدخول والخروج اليومية (آخر 7 أيام)</div>
+          <div style="display:flex; gap:0.8rem; font-size:0.78rem;">
+            <span style="color:#34d399;">● منضمون جدد</span>
+            <span style="color:#f87171;">● غادروا / حظروا</span>
+          </div>
+        </div>
+        <div class="chart-wrap" id="daily-chart"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🚀 طابور الرفع المرتب حالياً وآخر ما تم رفعه</div>
+          <span class="badge badge-blue" id="vault-series-ep-badge">0 مسلسل | 0 حلقة</span>
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">⏳ قيد التحميل والرفع بالترتيب في الـ Worker الآن:</div>
+          <div id="active-worker-queue" style="max-height:82px; overflow-y:auto;">—</div>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">✅ آخر الفيديوهات المرفوعة للقناة المخزنية:</div>
+        <div id="recent-uploads-list" class="feed-list" style="max-height:140px;"></div>
+      </div>
+    </section>
+
+    <!-- Affiliate & Points Full Attribution Tracking Section -->
+    <section class="panel" id="affiliate-section-anchor" style="margin-bottom:1.3rem; border-color:rgba(245, 158, 11, 0.28);">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🎁 مركز تتبع الأفلييت والنقاط (روابط تيليجرام رسمية t.me وتتبع الأشخاص الحقيقيين — بدون عد كليكات وهمية)</span>
+          <span class="badge badge-amber" id="aff-conv-badge">نسبة التفعيل: 0%</span>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <span class="badge badge-blue mono" id="aff-base-url-badge" title="رابط تيليجرام الرسمي للأفلييت">https://t.me/riva18_bot?start=...</span>
+          <button type="button" class="btn btn-ghost" onclick="loadAffiliates(currentAffPage)">🔄 تحديث الأفلييت</button>
+        </div>
+      </div>
+
+      <div class="verdict-banner" style="background:linear-gradient(90deg, rgba(245, 158, 11, 0.13), rgba(16, 185, 129, 0.11)); border-color:rgba(245, 158, 11, 0.32);">
+        <div>
+          💡 <b>آلية العمل الدقيقة:</b> كل فيلم أو مسلسل أو حلقة في البوت يحمل الآن رابط تيليجرام رسمي عادي خاص بالمستخدم (<span class="mono">https://t.me/riva18_bot?start=m-ID-CODE</span>). لا يتم احتساب أي نقرات خارجية؛ يُسجَّل فقط <b>الشخص الحقيقي الذي دخل البوت</b>، واسم <b>الشخص الذي أدخله</b>، واسم <b>الفيلم/الرابط الذي دخل منه بالظبط</b>، وتُضاف <b>+1 نقطة تلقائياً</b> فور استخدام المدعو الفعلي للبوت!
+        </div>
+      </div>
+
+      <!-- 4 Affiliate Summary Cards -->
+      <div class="funnel-grid" style="margin-bottom:1.1rem;">
+        <div class="sub-box" style="cursor:pointer;" onclick="setAffTab('all')">
+          <div style="font-size:0.78rem; color:var(--text-muted); font-weight:700;">👥 إجمالي أشخاص دخلوا بروابط إحالة</div>
+          <div style="font-size:1.65rem; font-weight:800; color:#60a5fa; margin:0.2rem 0;" id="aff-sum-entered">0</div>
+          <div style="font-size:0.74rem; color:var(--text-muted);">مستخدمون حقيقيون فتحوا البوت لأول مرة عبر رابط شخص آخر</div>
+        </div>
+        <div class="sub-box" style="cursor:pointer; border-color:rgba(16,185,129,0.32);" onclick="setAffTab('qualified')">
+          <div style="font-size:0.78rem; color:var(--text-muted); font-weight:700;">✅ استخدموا البوت فعلياً (+1 نقطة)</div>
+          <div style="font-size:1.65rem; font-weight:800; color:#34d399; margin:0.2rem 0;" id="aff-sum-qualified">0</div>
+          <div style="font-size:0.74rem; color:var(--text-muted);">أكملوا الشروط أو شاهدوا/بحثوا فحصل صاحب الرابط على نقطة</div>
+        </div>
+        <div class="sub-box" style="cursor:pointer; border-color:rgba(245,158,11,0.32);" onclick="setAffTab('pending')">
+          <div style="font-size:0.78rem; color:var(--text-muted); font-weight:700;">⏳ دخلوا وبانتظار استخدام البوت (0 نقطة)</div>
+          <div style="font-size:1.65rem; font-weight:800; color:#fbbf24; margin:0.2rem 0;" id="aff-sum-pending">0</div>
+          <div style="font-size:0.74rem; color:var(--text-muted);">فتحوا /start ولم يكملوا الشروط أو التفاعل بعد</div>
+        </div>
+        <div class="sub-box" style="cursor:pointer; border-color:rgba(139,92,246,0.35);" onclick="jumpToUserFilter('affiliates')">
+          <div style="font-size:0.78rem; color:var(--text-muted); font-weight:700;">🏆 إجمالي رصيد النقاط الحالية</div>
+          <div style="font-size:1.65rem; font-weight:800; color:#c4b5fd; margin:0.2rem 0;" id="aff-sum-points">0</div>
+          <div style="font-size:0.74rem; color:var(--text-muted);" id="aff-sum-marketers-sub">موزعة على 0 مسوق نشط</div>
+        </div>
+      </div>
+
+      <!-- Today's Full Entry Source Breakdown Strip -->
+      <div class="sub-box" style="margin-bottom:1.05rem; border-color:rgba(59,130,246,0.34); background:rgba(59,130,246,0.06);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.65rem;">
+          <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; font-size:0.83rem;">
+            <b>📅 تفصيل كل من دخل آخر 24 ساعة (<span id="aff-today-total" class="mono">0</span> شخص):</b>
+            <span class="badge badge-amber" id="aff-today-aff">🎯 عبر مسوق أفلييت: 0</span>
+            <span class="badge badge-cyan" id="aff-today-direct" title="أشخاص ضغطوا على رابط فيلم قديم مثل ?start=m_8909 تم نشره قبل تفعيل الأفلييت ولا يحتوي على كود مسوق">📢 رابط فيلم عام بدون كود مسوق: 0</span>
+            <span class="badge badge-blue" id="aff-today-organic" title="أشخاص فتحوا البوت مباشرة بـ /start بدون رابط إحالة">🤖 دخول مباشر للبوت (/start): 0</span>
+          </div>
+          <button type="button" class="btn btn-primary" style="padding:0.35rem 0.85rem; font-size:0.78rem;" onclick="setAffTab('today_all')">
+            🕵️ عرض كل من دخل اليوم ومصدر كل شخص ⬇️
+          </button>
+        </div>
+      </div>
+
+      <div class="aff-split">
+        <!-- Left Column: Leaderboard + Top Shared Movies/Links -->
+        <div style="display:flex; flex-direction:column; gap:0.95rem;">
+          <div class="sub-box">
+            <div class="sub-box-title">
+              <span>🥇 لوحة متصدري النقاط والأفلييت</span>
+              <span class="badge badge-amber" id="aff-lb-count">0 مسوق</span>
+            </div>
+            <div id="aff-leaderboard-list" class="feed-list" style="max-height:360px;">
+              <div style="color:var(--text-muted); font-size:0.82rem; text-align:center; padding:1.2rem;">جاري تحميل المتصدرين...</div>
+            </div>
+          </div>
+
+          <div class="sub-box">
+            <div class="sub-box-title">
+              <span>🔥 أكثر روابط الأفلام والمسلسلات جلباً للأشخاص</span>
+            </div>
+            <div id="aff-top-links-list" class="feed-list" style="max-height:230px;">
+              <div style="color:var(--text-muted); font-size:0.82rem; text-align:center; padding:1rem;">جاري التحميل...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Detailed Person-by-Person Attribution Table -->
+        <div class="sub-box">
+          <div class="sub-box-title" style="flex-wrap:wrap; gap:0.5rem;">
+            <span>🕵️ سجل تتبع الإحالات ومصادر الدخول (مين دخل — مين دخّله — وبأي لينك فيلم/مسلسل بالظبط)</span>
+            <div class="tabs" id="aff-tabs">
+              <button class="tab-btn active" data-affstatus="all" onclick="setAffTab('all')">🎯 إحالات المسوقين</button>
+              <button class="tab-btn" data-affstatus="today_all" onclick="setAffTab('today_all')" id="aff-tab-today-btn">📅 كل من دخل اليوم</button>
+              <button class="tab-btn" data-affstatus="qualified" onclick="setAffTab('qualified')">✅ استخدم البوت (+1 نقطة)</button>
+              <button class="tab-btn" data-affstatus="pending" onclick="setAffTab('pending')">⏳ بانتظار الاستخدام (0)</button>
+            </div>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:0.75rem;">
+            <input id="aff-search" type="text" class="search-input" placeholder="🔍 ابحث باسم المدعو أو صاحب اللينك أو اسم الفيلم أو كود اللينك..." oninput="debouncedLoadAffiliates()" />
+          </div>
+
+          <div class="table-wrap">
+            <table style="min-width:700px;">
+              <thead>
+                <tr>
+                  <th>👤 الشخص اللي دخل (المدعو)</th>
+                  <th>🎯 مين دخّله (صاحب اللينك)</th>
+                  <th>🔗 دخل بلينك إيه بالظبط</th>
+                  <th>⚡ استخدام البوت والنقطة</th>
+                  <th>🕒 التوقيت</th>
+                </tr>
+              </thead>
+              <tbody id="aff-referrals-tbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1.8rem;">جاري تحميل سجل الإحالات...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <span id="aff-page-info">صفحة 1 من 1</span>
+            <div style="display:flex; gap:0.45rem;">
+              <button id="aff-prev-btn" class="btn btn-ghost" onclick="changeAffPage(-1)">⬅️ السابق</button>
+              <button id="aff-next-btn" class="btn btn-ghost" onclick="changeAffPage(1)">التالي ➡️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Parallel Uploader Worker Bots Pool Section -->
+    <section class="panel" id="workers-section-anchor" style="margin-bottom:1.3rem;">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>⚡ بوتات الرفع المتوازي السريع (Telegram Uploader Workers Pool)</span>
+          <span class="badge badge-green" id="workers-pool-badge">1 بوت نشط</span>
+          <span class="badge badge-cyan" id="workers-inflight-badge">يرفع الآن: 0</span>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <button type="button" class="btn btn-ghost" onclick="copyVaultChannelId()" title="انسخ معرف قناة الأرشيف لترقية البوت الجديد كمشرف بداخلها">
+            📋 قناة الأرشيف: <span class="mono" id="vault-channel-id-lbl">—</span>
+          </button>
+          <button type="button" id="recheck-workers-btn" class="btn btn-ghost" onclick="recheckWorkerBots()">
+            🔄 فحص صلاحية القناة للكل
+          </button>
+        </div>
+      </div>
+
+      <form onsubmit="submitWorkerTokens(event)" style="display:grid; grid-template-columns: 1fr auto; gap:0.75rem; align-items:stretch; margin-bottom:1rem;">
+        <textarea
+          id="worker-tokens-input"
+          class="input-field mono"
+          rows="2"
+          style="resize:vertical; min-height:52px; font-size:0.84rem; direction:ltr; text-align:left;"
+          placeholder="الصق هنا توكن بوت جديد من @BotFather (أو عدة توكنات تحت بعضها في نفس المربع)... مثال: 1234567890:AAH..."
+        ></textarea>
+        <button id="add-workers-btn" type="submit" class="btn btn-primary" style="padding:0 1.35rem;">
+          ➕ إضافة وتفعيل الوركر فوراً
+        </button>
+      </form>
+      <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.95rem;">
+        💡 <b>ملاحظة سريعة:</b> بعد إنشاء البوت من <span class="mono">@BotFather</span>، قم بإضافته كـ <b>مشرف (Admin) بصلاحية نشر الرسائل (Post Messages)</b> داخل قناة الأرشيف أعلاه، وبمجرد لصق التوكن هنا يبدأ الرفع التلقائي بالتوازي فوراً بدون ريستارت!
+      </div>
+
+      <div id="workers-cards-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap:0.8rem;">
+        <div style="color:var(--text-muted); font-size:0.84rem;">جاري تحميل قائمة بوتات الرفع...</div>
+      </div>
+    </section>
+
+    <!-- Users Explorer + Live Events Timeline -->
+    <section class="main-split" id="users-section-anchor">
+      <!-- Users Table Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">👥 قائمة المشتركين (اضغط على أي مستخدم أو زر التفاعل لعرض قصته كاملة)</div>
+          <div class="tabs" id="user-tabs">
+            <button class="tab-btn active" data-status="all" onclick="setUserTab('all')">الكل</button>
+            <button class="tab-btn" data-status="today" onclick="setUserTab('today')">🆕 انضموا اليوم</button>
+            <button class="tab-btn" data-status="active" onclick="setUserTab('active')">🟢 الحاليين</button>
+            <button class="tab-btn" data-status="affiliates" onclick="setUserTab('affiliates')">🏆 مسوقو الأفلييت</button>
+            <button class="tab-btn" data-status="referred" onclick="setUserTab('referred')">🔗 دخلوا عبر إحالة</button>
+            <button class="tab-btn" data-status="compliant" onclick="setUserTab('compliant')">✅ ملتزم بالشروط</button>
+            <button class="tab-btn" data-status="noncompliant" onclick="setUserTab('noncompliant')">❌ لم يتبع الشروط</button>
+            <button class="tab-btn" data-status="watchers" onclick="setUserTab('watchers')">🍿 شاهدوا فعلاً</button>
+            <button class="tab-btn" data-status="binge" onclick="setUserTab('binge')">🔥 كملوا المشاهدة</button>
+            <button class="tab-btn" data-status="left" onclick="setUserTab('left')">🚪 اللي طلعوا</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input id="user-search" type="text" class="search-input" placeholder="🔍 ابحث بالاسم أو @username أو User ID أو اسم الفيلم الذي دخل منه..." oninput="debouncedLoadUsers()" />
+          <select id="user-sort" class="select-box" onchange="loadUsers(1)">
+            <option value="last_active">الترتيب: آخر ظهور</option>
+            <option value="points">الترتيب: الأعلى نقاطاً وإحالات 🏆</option>
+            <option value="actions">الترتيب: الأكثر مشاهدة وتفاعلاً</option>
+            <option value="joined">الترتيب: الأحدث انضماماً</option>
+            <option value="left">الترتيب: الأحدث مغادرة</option>
+          </select>
+          <button class="btn btn-ghost" onclick="exportUsersCsv()">📥 تصدير CSV</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>المستخدم والأفلييت</th>
+                <th>حالة البوت</th>
+                <th>التزام الشروط والجروبات</th>
+                <th>تفصيل التفاعل والنقاط (اضغط للتفاصيل)</th>
+                <th>آخر خطوة وتوقيتها</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">جاري التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <span id="users-page-info">صفحة 1 من 1</span>
+          <div style="display:flex; gap:0.45rem;">
+            <button id="prev-page-btn" class="btn btn-ghost" onclick="changeUserPage(-1)">⬅️ السابق</button>
+            <button id="next-page-btn" class="btn btn-ghost" onclick="changeUserPage(1)">التالي ➡️</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Event Feed -->
+      <div class="panel" id="timeline-panel-anchor">
+        <div class="panel-header">
+          <div class="panel-title">📜 سجل الأحداث اللحظي (اضغط على الحدث لملف المستخدم)</div>
+          <select id="event-filter" class="select-box" onchange="loadEvents()">
+            <option value="all">كل الأحداث</option>
+            <option value="affiliate">🎁 الأفلييت والنقاط</option>
+            <option value="rules">التزام الشروط والجروبات</option>
+            <option value="watches">المشاهدات (أفلام وحلقات)</option>
+            <option value="search">عمليات البحث</option>
+            <option value="browse">تصفح الأقسام</option>
+            <option value="joins_leaves">دخول وخروج فقط</option>
+          </select>
+        </div>
+        <div id="events-feed" class="feed-list">
+          <div style="text-align:center; color:var(--text-muted); padding:2rem;">جاري تحميل السجل...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'riva_bot_admin_pass';
+    let adminPass = localStorage.getItem(STORAGE_KEY) || '';
+    let currentStatusTab = 'all';
+    let currentUserPage = 1;
+    let totalUserPages = 1;
+    let currentAffTab = 'all';
+    let currentAffPage = 1;
+    let totalAffPages = 1;
+    let searchTimer = null;
+    let affSearchTimer = null;
+    let refreshInterval = null;
+    let openModalUserId = null;
+
+    function copyTextClip(txt, label = 'الرابط') {
+      if (!txt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(() => showToast(`📋 تم نسخ ${label}: ${txt}`));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(`📋 تم نسخ ${label}: ${txt}`);
+      }
+    }
+
+    function esc(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function relTime(isoStr) {
+      if (!isoStr) return '—';
+      const dt = new Date(isoStr);
+      if (isNaN(dt.getTime())) return '—';
+      const diff = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+      if (diff < 60) return 'الآن';
+      if (diff < 3600) return `منذ ${Math.floor(diff / 60)} د`;
+      if (diff < 86400) return `منذ ${Math.floor(diff / 3600)} س`;
+      if (diff < 86400 * 30) return `منذ ${Math.floor(diff / 86400)} يوم`;
+      return dt.toLocaleDateString('ar-EG');
+    }
+
+    function fmtDate(isoStr) {
+      if (!isoStr) return '—';
+      const dt = new Date(isoStr);
+      if (isNaN(dt.getTime())) return '—';
+      return dt.toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast-banner');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 6500);
+    }
+
+    function renderRulesBadge(rulesStatus, joinedCnt, reqCnt) {
+      const ratio = reqCnt > 0 ? ` (${joinedCnt}/${reqCnt})` : '';
+      if (rulesStatus === 'compliant') {
+        return `<span class="badge badge-green">✅ ملتزم بالشروط${ratio}</span>`;
+      }
+      if (rulesStatus === 'partial') {
+        return `<span class="badge badge-amber">⚠️ مشترك جزئياً${ratio}</span>`;
+      }
+      if (rulesStatus === 'left_channel') {
+        return `<span class="badge badge-red">🚪 اشترك ثم غادر جروب${ratio}</span>`;
+      }
+      if (rulesStatus === 'unsubscribed') {
+        return `<span class="badge badge-red">❌ لم يشترك${ratio}</span>`;
+      }
+      if (rulesStatus === 'no_rules') {
+        return `<span class="badge badge-blue">لا توجد شروط</span>`;
+      }
+      return `<span class="badge badge-blue">⏳ اضغط للفحص</span>`;
+    }
+
+    async function apiFetch(path, opts = {}) {
+      const headers = Object.assign({ 'X-Admin-Password': adminPass, 'Content-Type': 'application/json' }, opts.headers || {});
+      const resp = await fetch(path, Object.assign({}, opts, { headers }));
+      if (resp.status === 401) {
+        logoutAdmin('انتهت الجلسة أو كلمة السر غير صحيحة');
+        throw new Error('Unauthorized');
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || 'حدث خطأ في الاتصال');
+      }
+      return resp.json();
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const pass = document.getElementById('admin-pass-input').value.trim();
+      const errEl = document.getElementById('login-err');
+      const btn = document.getElementById('login-btn');
+      errEl.textContent = '';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/v1/bot-admin/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        if (!res.ok) {
+          errEl.textContent = '❌ كلمة السر غير صحيحة، حاول مرة أخرى.';
+          btn.disabled = false;
+          return;
+        }
+        adminPass = pass;
+        localStorage.setItem(STORAGE_KEY, pass);
+        document.getElementById('login-screen').style.display = 'none';
+        startLiveLoop();
+      } catch (err) {
+        errEl.textContent = '⚠️ تعذر الاتصال بالسيرفر.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function logoutAdmin(reason = '') {
+      localStorage.removeItem(STORAGE_KEY);
+      adminPass = '';
+      if (refreshInterval) clearInterval(refreshInterval);
+      document.getElementById('login-screen').style.display = 'flex';
+      if (reason) document.getElementById('login-err').textContent = reason;
+    }
+
+    async function loadOverview() {
+      const data = await apiFetch('/v1/bot-admin/overview');
+      const u = data.users;
+      const f = data.funnel || {};
+      const it = f.interaction_totals || {};
+      const v = data.vault;
+      const reqChs = data.required_channels || [];
+
+      // Top KPIs
+      document.getElementById('kpi-active').textContent = `${u.active.toLocaleString()} / ${u.total.toLocaleString()}`;
+      document.getElementById('kpi-retention').textContent = `نسبة البقاء ${u.retention_pct}%`;
+      document.getElementById('kpi-online1h').textContent = `نشط آخر ساعة: ${u.online_1h}`;
+
+      const nonCompTotal = (f.partial || 0) + (f.unsubscribed || 0) + (f.left_channel || 0);
+      document.getElementById('kpi-compliant').textContent = (f.compliant || 0).toLocaleString();
+      document.getElementById('kpi-compliance-pct').textContent = `${f.compliance_pct || 0}% التزام كامل`;
+      document.getElementById('kpi-noncompliant-sub').textContent = `غير مكتمل: ${nonCompTotal}`;
+
+      const totWatchedFiles = (it.movies_watched || 0) + (it.episodes_watched || 0);
+      document.getElementById('kpi-watchers').textContent = (f.watchers || 0).toLocaleString();
+      document.getElementById('kpi-binge').textContent = `🔥 كمّلوا المشاهدة: ${f.binge_watchers || 0}`;
+      document.getElementById('kpi-total-watches').textContent = `إجمالي ${totWatchedFiles} مشاهدة`;
+
+      document.getElementById('kpi-left').textContent = u.left.toLocaleString();
+      document.getElementById('kpi-left-today').textContent = `خرج اليوم: ${u.left_today}`;
+      document.getElementById('kpi-joined-today-sub').textContent = `انضم اليوم: +${u.joined_today}`;
+
+      document.getElementById('kpi-vault-main').textContent = `${v.ready_movies.toLocaleString()} فيلم`;
+      document.getElementById('kpi-up24h').textContent = `+${v.uploaded_24h} آخر 24س`;
+      document.getElementById('kpi-vault-gb').textContent = `${v.total_gb} GB`;
+      document.getElementById('vault-series-ep-badge').textContent = `${v.ready_series} مسلسل | ${v.ready_episodes} حلقة جاهزة`;
+
+      const aff = data.affiliate || {};
+      document.getElementById('kpi-aff-main').textContent = `${(aff.qualified_referrals || 0).toLocaleString()} / ${(aff.total_entered || 0).toLocaleString()}`;
+      document.getElementById('kpi-aff-points').textContent = `🏆 النقاط: ${(aff.total_points || 0).toLocaleString()}`;
+      document.getElementById('kpi-aff-active').textContent = `المسوقون: ${aff.active_affiliates || 0}`;
+
+      // Funnel Cards
+      const totalEnt = Math.max(1, f.total_entered || u.total || 1);
+      const bingePct = u.total > 0 ? Math.round(((f.binge_watchers || 0) / totalEnt) * 100) : 0;
+
+      document.getElementById('fn-entered').textContent = (f.total_entered || 0).toLocaleString();
+      document.getElementById('fn-active-sub').textContent = `متواجد حالياً بالبوت: ${u.active} | غادر: ${u.left}`;
+
+      document.getElementById('fn-compliant').textContent = (f.compliant || 0).toLocaleString();
+      document.getElementById('fn-comp-pct').textContent = `${f.compliance_pct || 0}%`;
+      document.getElementById('fn-comp-bar').style.width = `${Math.min(100, f.compliance_pct || 0)}%`;
+      document.getElementById('fn-comp-breakdown').innerHTML =
+        `<span>⚠️ جزئي: <b>${f.partial || 0}</b></span> • <span>❌ لم يشترك: <b>${f.unsubscribed || 0}</b></span>` +
+        ((f.left_channel || 0) > 0 ? ` • <span style="color:#f87171;">🚪 ترك جروب: <b>${f.left_channel}</b></span>` : '');
+
+      document.getElementById('fn-watchers').textContent = (f.watchers || 0).toLocaleString();
+      document.getElementById('fn-watch-pct').textContent = `${f.watch_conversion_pct || 0}%`;
+      document.getElementById('fn-watch-bar').style.width = `${Math.min(100, f.watch_conversion_pct || 0)}%`;
+
+      document.getElementById('fn-binge').textContent = (f.binge_watchers || 0).toLocaleString();
+      document.getElementById('fn-binge-pct').textContent = `${bingePct}%`;
+      document.getElementById('fn-binge-bar').style.width = `${Math.min(100, bingePct)}%`;
+
+      // Plain-Arabic Smart Verdict
+      const verdictEl = document.getElementById('smart-verdict-box');
+      if ((f.total_entered || 0) === 0) {
+        verdictEl.innerHTML = '<span>💡 لم يدخل أي مستخدم بعد. فور دخول المشتركين سيظهر هنا تحليل التزامهم بالشروط ومشاهداتهم.</span>';
+      } else {
+        const compWord = (f.compliance_pct || 0) >= 60 ? 'أغلب المشتركين ملتزمون بالشروط ممتاز ✅' : 'جزء من المشتركين يتوقف عند حاجز الشروط ⚠️';
+        verdictEl.innerHTML = `
+          <div>
+            <strong>💡 الخلاصة المباشرة:</strong> ${compWord} — من أصل <b>${f.total_entered}</b> مستخدم دخلوا البوت،
+            <b>${f.compliant} (${f.compliance_pct}%)</b> اشتركوا في جميع الجروبات الـ ${reqChs.length}،
+            و <b>${nonCompTotal}</b> لم يكملوا شروط الجروبات${f.left_channel ? ` (منهم ${f.left_channel} غادر جروب بعد الاشتراك)` : ''}.
+            وبالنسبة للمشاهدة: <b>${f.watchers} مستخدم</b> شاهدوا أفلام/مسلسلات فعلياً، منهم <b>${f.binge_watchers}</b> كمّلوا مشاهدة أكثر من عمل/حلقة!
+          </div>
+          ${(f.unknown || 0) > 0 ? `<button class="btn btn-success" style="padding:0.38rem 0.8rem; font-size:0.78rem;" onclick="runSilentScan()">🔍 يوجد ${f.unknown} مستخدم لم يُفحص بعد — افحصهم الآن</button>` : ''}
+        `;
+      }
+
+      // Per-Channel Compliance Bars
+      document.getElementById('req-ch-count-lbl').textContent = `${reqChs.length} جروبات إجبارية`;
+      const chListEl = document.getElementById('channels-compliance-list');
+      if (reqChs.length === 0) {
+        chListEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.83rem;">لا توجد قنوات اشتراك إجباري مضافة حالياً.</div>';
+      } else {
+        chListEl.innerHTML = reqChs.map(c => {
+          const barColor = c.pct >= 70 ? '#10b981' : (c.pct >= 40 ? '#f59e0b' : '#ef4444');
+          return `
+            <div class="ch-row">
+              <div class="ch-head">
+                <a href="${esc(c.invite_link)}" target="_blank">📢 ${esc(c.title)}</a>
+                <span>مشترك <b>${c.joined_count}</b> من <b>${c.checked_count}</b> (<b class="mono">${c.pct}%</b>)</span>
+              </div>
+              <div class="funnel-bar-bg" style="margin-bottom:0;">
+                <div class="funnel-bar-fill" style="width:${Math.min(100, c.pct)}%; background:${barColor};"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Global Typed Interactions
+      document.getElementById('global-clicks-lbl').textContent = `إجمالي خطوات ونقرات البوت: ${(u.total_interactions || 0).toLocaleString()}`;
+      document.getElementById('tot-movies-watched').textContent = (it.movies_watched || 0).toLocaleString();
+      document.getElementById('tot-eps-watched').textContent = (it.episodes_watched || 0).toLocaleString();
+      document.getElementById('tot-searches').textContent = (it.searches || 0).toLocaleString();
+      document.getElementById('tot-browses').textContent = (it.browses || 0).toLocaleString();
+      document.getElementById('tot-rules-blocks').textContent = (it.rules_blocks || 0).toLocaleString();
+
+      const notifOn = data.settings && data.settings.notify_admin_events;
+      document.getElementById('notif-btn').textContent = notifOn ? '🔔 الإشعارات: مفعلة' : '🔕 الإشعارات: متوقفة';
+
+      // Render 7-day chart
+      const chartEl = document.getElementById('daily-chart');
+      const days = data.daily_chart || [];
+      const maxVal = Math.max(1, ...days.map(d => Math.max(d.joined, d.left)));
+      chartEl.innerHTML = days.map(d => {
+        const jH = Math.max(5, Math.round((d.joined / maxVal) * 110));
+        const lH = Math.max(5, Math.round((d.left / maxVal) * 110));
+        return `
+          <div class="chart-col">
+            <div class="chart-nums">
+              <span style="color:#34d399;">+${d.joined}</span>
+              <span style="color:#f87171;">-${d.left}</span>
+            </div>
+            <div class="chart-bars">
+              <div class="bar bar-join" style="height:${d.joined ? jH : 4}px" title="انضموا: ${d.joined}"></div>
+              <div class="bar bar-left" style="height:${d.left ? lH : 4}px" title="غادروا: ${d.left}"></div>
+            </div>
+            <div class="chart-lbl mono">${esc(d.day)}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Active worker queue
+      const qEl = document.getElementById('active-worker-queue');
+      if (!v.active_queue || v.active_queue.length === 0) {
+        qEl.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted);">في انتظار الدفعة القادمة من المنسق التلقائي...</span>';
+      } else {
+        qEl.innerHTML = v.active_queue.map(item =>
+          `<span class="queue-chip">${item.type === 'movie' ? '🎬' : '📺'} ${esc(item.title)}</span>`
+        ).join('');
+      }
+
+      // Recent uploads
+      const upEl = document.getElementById('recent-uploads-list');
+      if (!v.recent_uploads || v.recent_uploads.length === 0) {
+        upEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.82rem;">لا توجد رفوعات مسجلة بعد.</div>';
+      } else {
+        upEl.innerHTML = v.recent_uploads.map(r => `
+          <div class="feed-item">
+            <div>
+              <div class="feed-title">${r.media_type === 'movie' ? '🎬' : '📺'} ${esc(r.title)}</div>
+              <div class="feed-sub mono">${r.size_mb} MB • msg #${r.message_id}</div>
+            </div>
+            <div class="feed-time">${relTime(r.created_at)}</div>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('last-sync-text').textContent =
+        `آخر تحديث لحظي: ${new Date().toLocaleTimeString('ar-EG')}`;
+    }
+
+    async function loadAffiliates(page = currentAffPage) {
+      currentAffPage = page;
+      const q = (document.getElementById('aff-search')?.value || '').trim();
+      const params = new URLSearchParams({
+        status: currentAffTab,
+        page: String(currentAffPage),
+        per_page: '15'
+      });
+      if (q) params.set('search', q);
+
+      const data = await apiFetch('/v1/bot-admin/affiliates?' + params.toString());
+      const sum = data.summary || {};
+      const lb = data.leaderboard || [];
+      const topLinks = data.top_links || [];
+      const refsObj = data.referrals || {};
+      const refItems = refsObj.items || [];
+      totalAffPages = refsObj.total_pages || 1;
+
+      document.getElementById('aff-conv-badge').textContent = `نسبة التفعيل بالاستخدام: ${sum.conversion_pct || 0}%`;
+      document.getElementById('aff-base-url-badge').textContent = `${sum.public_redirect_base || 'https://t.me/riva18_bot?start='}...`;
+      document.getElementById('aff-sum-entered').textContent = (sum.total_entered || 0).toLocaleString();
+      document.getElementById('aff-sum-qualified').textContent = (sum.qualified_referrals || 0).toLocaleString();
+      document.getElementById('aff-sum-pending').textContent = (sum.pending_referrals || 0).toLocaleString();
+      document.getElementById('aff-sum-points').textContent = (sum.total_points || 0).toLocaleString();
+      document.getElementById('aff-sum-marketers-sub').textContent = `موزعة على ${sum.active_affiliates || 0} مسوق نشط`;
+      document.getElementById('aff-lb-count').textContent = `${lb.length} متصدر`;
+      document.getElementById('aff-today-total').textContent = (sum.today_total || 0).toLocaleString();
+      document.getElementById('aff-today-aff').textContent = `🎯 عبر مسوق أفلييت: ${sum.today_affiliate || 0}`;
+      document.getElementById('aff-today-direct').textContent = `📢 رابط فيلم عام بدون كود مسوق: ${sum.today_direct_link || 0}`;
+      document.getElementById('aff-today-organic').textContent = `🤖 دخول مباشر للبوت (/start): ${sum.today_organic || 0}`;
+      const todayTabBtn = document.getElementById('aff-tab-today-btn');
+      if (todayTabBtn) {
+        todayTabBtn.textContent = `📅 كل من دخل اليوم (${sum.today_total || 0})`;
+      }
+
+      // 1. Leaderboard
+      const lbEl = document.getElementById('aff-leaderboard-list');
+      if (lb.length === 0) {
+        lbEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.82rem; text-align:center; padding:1.2rem;">لا يوجد مسوقون بنقاط أو إحالات حتى الآن — فور مشاركة أي مستخدم لرابط فيلم ودخول شخص جديد سيظهر اسمه ونقاطه هنا تلقائياً!</div>';
+      } else {
+        const medals = ['🥇', '🥈', '🥉'];
+        lbEl.innerHTML = lb.map((m, idx) => {
+          const rankLbl = medals[idx] || `#${idx + 1}`;
+          const mName = `${m.first_name || ''} ${m.last_name || ''}`.trim() || `User ${m.user_id}`;
+          const mUser = m.username ? `<span class="mono" style="color:#60a5fa;">@${esc(m.username)}</span>` : `<span class="mono">#${m.user_id}</span>`;
+          return `
+            <div class="feed-item clickable" onclick="openUserModal(${m.user_id})" style="align-items:center;">
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                  <span style="font-size:1rem;">${rankLbl}</span>
+                  <span class="feed-title">${esc(mName)}</span>
+                  ${mUser}
+                </div>
+                <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.28rem; font-size:0.74rem;">
+                  <span class="badge badge-amber">🏆 ${m.points} نقطة</span>
+                  <span class="mini-pill">👥 أدخل: <b>${m.total_referrals_entered}</b></span>
+                  <span class="mini-pill" style="color:#34d399;">✅ استخدموا البوت: <b>${m.qualified_referrals_count}</b></span>
+                  ${m.pending_count > 0 ? `<span class="mini-pill" style="color:#fbbf24;">⏳ معلق: ${m.pending_count}</span>` : ''}
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:0.3rem; align-items:flex-end;">
+                <button type="button" class="btn btn-ghost" style="padding:0.25rem 0.55rem; font-size:0.73rem;" onclick="event.stopPropagation(); copyTextClip('${esc(m.personal_redirect_url)}', 'رابط إحالة المسوق')">🔗 نسخ رابطه</button>
+                <button type="button" class="btn btn-success" style="padding:0.25rem 0.55rem; font-size:0.73rem;" onclick="event.stopPropagation(); quickPromptPoints(${m.user_id}, '${esc(mName)}', ${m.points})">⚖️ نقاط</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 2. Top Shared Movies / Links
+      const tlEl = document.getElementById('aff-top-links-list');
+      if (topLinks.length === 0) {
+        tlEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.81rem; text-align:center; padding:0.9rem;">ستظهر هنا أكثر الأفلام والمسلسلات التي تجلب مشتركين جدد عبر الروابط.</div>';
+      } else {
+        tlEl.innerHTML = topLinks.map(tl => {
+          const ico = tl.target_type === 'movie' ? '🎬' : (tl.target_type === 'series' || tl.target_type === 'episode' ? '📺' : '🤖');
+          const kindBadge = tl.source_kind === 'affiliate'
+            ? `<span class="badge badge-amber" style="font-size:0.68rem;">🎯 أفلييت مسوق</span>`
+            : `<span class="badge badge-cyan" style="font-size:0.68rem;">📢 رابط عام بدون مسوق</span>`;
+          return `
+            <div class="feed-item" style="padding:0.55rem 0.75rem; align-items:center;">
+              <div>
+                <div style="font-size:0.82rem; font-weight:700;">${ico} ${esc(tl.target_title)}</div>
+                <div style="margin-top:0.18rem;">${kindBadge}</div>
+              </div>
+              <div style="display:flex; gap:0.35rem; white-space:nowrap;">
+                <span class="badge badge-blue">دخل ${tl.entered_count}</span>
+                <span class="badge badge-green">استخدم ${tl.qualified_count}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 3. Detailed Person-by-Person Attribution Table
+      const refTbody = document.getElementById('aff-referrals-tbody');
+      if (refItems.length === 0) {
+        refTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">لا توجد نتائج مطابقة للفلتر الحالي — يمكنك الضغط على «📅 كل من دخل اليوم» بالأعلى لعرض جميع المنضمين اليوم ومصدر دخول كل واحد منهم!</td></tr>';
+      } else {
+        refTbody.innerHTML = refItems.map(item => {
+          const inv = item.referred || {};
+          const ref = item.referrer || null;
+          const entrySrc = item.entry_source || (ref ? 'affiliate' : 'organic');
+          const invName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || `User ${inv.user_id}`;
+          const invUser = inv.username
+            ? `<a href="https://t.me/${esc(inv.username)}" target="_blank" class="mono" style="color:#60a5fa;" onclick="event.stopPropagation()">@${esc(inv.username)}</a>`
+            : `<span style="color:var(--text-muted);">بدون يوزر</span>`;
+          const invActiveDot = inv.is_active ? '🟢' : '🚪';
+
+          let whoBroughtCellHtml = '';
+          let linkCellHtml = '';
+          let qualBadge = '';
+
+          if (entrySrc === 'affiliate' && ref && ref.user_id) {
+            const refName = `${ref.first_name || ''} ${ref.last_name || ''}`.trim() || `User ${ref.user_id}`;
+            const refUser = ref.username
+              ? `<a href="https://t.me/${esc(ref.username)}" target="_blank" class="mono" style="color:#93c5fd;" onclick="event.stopPropagation()">@${esc(ref.username)}</a>`
+              : `<span class="mono">#${ref.user_id}</span>`;
+            const targetIco = item.target_type === 'movie' ? '🎬' : (item.target_type === 'series' || item.target_type === 'episode' ? '📺' : '🤖');
+            whoBroughtCellHtml = `
+              <td onclick="event.stopPropagation(); openUserModal(${ref.user_id})" title="اضغط لفتح ملف صاحب الرابط">
+                <div style="font-weight:800; color:#fbbf24; text-decoration:underline dotted;">🎯 ${esc(refName)}</div>
+                <div class="user-meta">${refUser} • <span class="badge badge-amber" style="padding:0.08rem 0.42rem; font-size:0.69rem;">🏆 ${ref.points} نقطة</span></div>
+              </td>
+            `;
+            linkCellHtml = `
+              <td>
+                <div style="font-weight:700; color:#e2e8f0;">${targetIco} ${esc(item.target_title)}</div>
+                <div style="display:flex; gap:0.35rem; align-items:center; margin-top:0.2rem;">
+                  <span class="mono" style="font-size:0.73rem; color:#93c5fd;">t.me/riva18_bot?start=${esc(item.referral_code)}</span>
+                  <button type="button" class="btn btn-ghost" style="padding:0.12rem 0.42rem; font-size:0.68rem;" onclick="event.stopPropagation(); copyTextClip('${esc(item.redirect_url)}', 'رابط تيليجرام للإحالة')">نسخ</button>
+                </div>
+              </td>
+            `;
+            qualBadge = item.status === 'qualified'
+              ? `<span class="badge badge-green">✅ استخدم البوت (+${item.points_awarded || 1} نقطة)</span>`
+              : `<span class="badge badge-amber">⏳ دخل فقط بدون استخدام (0 نقطة)</span>`;
+          } else if (entrySrc === 'direct_link') {
+            const targetIco = item.target_type === 'movie' ? '🎬' : '📺';
+            const codeHint = (item.referral_code && item.referral_code !== 'direct_link')
+              ? `t.me/riva18_bot?start=${esc(item.referral_code)}`
+              : 'رابط عمل منشور بدون كود مسوق';
+            whoBroughtCellHtml = `
+              <td>
+                <div style="font-weight:800; color:#22d3ee;">📢 رابط فيلم/مسلسل عام</div>
+                <div class="user-meta" style="color:var(--text-muted);">منشور سابق بدون كود شخص مسوق</div>
+              </td>
+            `;
+            linkCellHtml = `
+              <td>
+                <div style="font-weight:700; color:#e2e8f0;">${targetIco} ${esc(item.target_title)}</div>
+                <div class="mono" style="font-size:0.72rem; color:#67e8f9; margin-top:0.2rem;">${codeHint}</div>
+              </td>
+            `;
+            const watchedAny = (inv.movies_watched_count || 0) + (inv.episodes_watched_count || 0) > 0;
+            qualBadge = watchedAny
+              ? `<span class="badge badge-cyan">🍿 شاهد العمل (بدون مسوق)</span>`
+              : `<span class="badge badge-blue">👣 فتح الرابط (بدون مسوق)</span>`;
+          } else {
+            whoBroughtCellHtml = `
+              <td>
+                <div style="font-weight:700; color:#94a3b8;">🤖 دخول مباشر للبوت</div>
+                <div class="user-meta" style="color:var(--text-muted);">فتح @riva18_bot مباشرة بدون إحالة</div>
+              </td>
+            `;
+            linkCellHtml = `
+              <td>
+                <div style="font-weight:600; color:var(--text-muted);">🚀 أمر /start مباشر</div>
+                <div class="mono" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.18rem;">t.me/riva18_bot</div>
+              </td>
+            `;
+            const watchedAny = (inv.movies_watched_count || 0) + (inv.episodes_watched_count || 0) > 0;
+            qualBadge = watchedAny
+              ? `<span class="badge badge-purple">🍿 استخدم البوت (دخول مباشر)</span>`
+              : `<span class="badge badge-blue">👣 فتح البوت فقط</span>`;
+          }
+
+          const actPills = [];
+          if (inv.movies_watched_count > 0) actPills.push(`<span class="mini-pill">🎬 ${inv.movies_watched_count} فيلم</span>`);
+          if (inv.episodes_watched_count > 0) actPills.push(`<span class="mini-pill">📺 ${inv.episodes_watched_count} حلقة</span>`);
+          if (inv.searches_count > 0) actPills.push(`<span class="mini-pill">🔍 ${inv.searches_count} بحث</span>`);
+          actPills.push(`<span class="mini-pill">📊 ${inv.actions_count || 1} خطوة</span>`);
+
+          return `
+            <tr class="user-row" onclick="openUserModal(${inv.user_id})">
+              <td>
+                <div style="font-weight:800; color:#f8fafc;">${invActiveDot} ${esc(invName)}</div>
+                <div class="user-meta">${invUser} • <span class="mono">ID: ${inv.user_id}</span></div>
+              </td>
+              ${whoBroughtCellHtml}
+              ${linkCellHtml}
+              <td>
+                ${qualBadge}
+                <div class="mini-breakdown">${actPills.join('')}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.18rem;">آخر خطوة: ${esc(inv.last_action || 'فتح البوت')}</div>
+              </td>
+              <td>
+                <div style="font-size:0.78rem; font-weight:700;">دخل: ${relTime(item.created_at)}</div>
+                <div style="font-size:0.71rem; color:var(--text-muted);">${item.qualified_at ? `تفعّل: ${fmtDate(item.qualified_at)}` : fmtDate(item.created_at)}</div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      const listLbl = currentAffTab === 'today_all' ? 'إجمالي المنضمين اليوم' : 'إجمالي الإحالات';
+      document.getElementById('aff-page-info').textContent =
+        `${listLbl}: ${refsObj.total || 0} — صفحة ${refsObj.page || 1} من ${totalAffPages}`;
+      document.getElementById('aff-prev-btn').disabled = currentAffPage <= 1;
+      document.getElementById('aff-next-btn').disabled = currentAffPage >= totalAffPages;
+    }
+
+    function setAffTab(st) {
+      currentAffTab = st;
+      document.querySelectorAll('#aff-tabs .tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.affstatus === st);
+      });
+      loadAffiliates(1);
+    }
+
+    function changeAffPage(delta) {
+      const next = currentAffPage + delta;
+      if (next >= 1 && next <= totalAffPages) loadAffiliates(next);
+    }
+
+    function debouncedLoadAffiliates() {
+      clearTimeout(affSearchTimer);
+      affSearchTimer = setTimeout(() => loadAffiliates(1), 320);
+    }
+
+    async function quickPromptPoints(userId, userName, currentPts) {
+      const raw = prompt(`⚖️ تعديل نقاط «${userName}» (الرصيد الحالي: ${currentPts} نقطة)\nأدخل عدد النقاط للإضافة (مثال: +5) أو للخصم (مثال: -2):`, '+1');
+      if (raw === null) return;
+      const delta = parseInt(raw.trim(), 10);
+      if (isNaN(delta) || delta === 0) {
+        alert('يرجى إدخال رقم صحيح غير الصفر (مثال: 5 أو -2)');
+        return;
+      }
+      const reason = prompt('📝 سبب تعديل النقاط (اختياري):', 'مكافأة / تعديل إداري من الداشبورد') || 'تعديل إداري من الداشبورد';
+      try {
+        const res = await apiFetch(`/v1/bot-admin/users/${userId}/points`, {
+          method: 'POST',
+          body: JSON.stringify({ delta, reason, notify_user: true })
+        });
+        showToast(`✅ تم تحديث رصيد نقاط ${userName} إلى ${res.points} نقطة وإشعاره بالبوت!`);
+        await refreshAll(false);
+        if (openModalUserId === userId) openUserModal(userId, false);
+      } catch (err) {
+        alert('⚠️ تعذر تعديل النقاط: ' + err.message);
+      }
+    }
+
+    async function submitModalPointsAdjust(e, userId) {
+      e.preventDefault();
+      const deltaInp = document.getElementById('modal-pts-delta');
+      const reasonInp = document.getElementById('modal-pts-reason');
+      const notifyChk = document.getElementById('modal-pts-notify');
+      const delta = parseInt((deltaInp?.value || '').trim(), 10);
+      if (isNaN(delta) || delta === 0) {
+        alert('يرجى كتابة عدد النقاط للإضافة (مثل 5) أو للخصم (مثل -2)');
+        return;
+      }
+      const reason = (reasonInp?.value || '').trim() || 'تعديل إداري من ملف المستخدم';
+      const notify_user = !!(notifyChk && notifyChk.checked);
+      try {
+        const res = await apiFetch(`/v1/bot-admin/users/${userId}/points`, {
+          method: 'POST',
+          body: JSON.stringify({ delta, reason, notify_user })
+        });
+        showToast(`✅ تم تحديث رصيد النقاط إلى ${res.points} نقطة بنجاح!`);
+        await Promise.all([loadOverview(), loadAffiliates(currentAffPage), loadUsers(currentUserPage)]);
+        await openUserModal(userId, false);
+      } catch (err) {
+        alert('⚠️ ' + err.message);
+      }
+    }
+
+    async function loadUsers(page = currentUserPage) {
+      currentUserPage = page;
+      const q = document.getElementById('user-search').value.trim();
+      const sort = document.getElementById('user-sort').value;
+      const params = new URLSearchParams({
+        status: currentStatusTab,
+        sort: sort,
+        page: String(currentUserPage),
+        per_page: '20'
+      });
+      if (q) params.set('search', q);
+
+      const data = await apiFetch('/v1/bot-admin/users?' + params.toString());
+      totalUserPages = data.total_pages || 1;
+      const tbody = document.getElementById('users-tbody');
+
+      if (!data.items || data.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">لا يوجد مستخدمون مطابقون للفلتر الحالي.</td></tr>';
+      } else {
+        tbody.innerHTML = data.items.map(u => {
+          const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'مستخدم بدون اسم';
+          const initial = fullName.charAt(0).toUpperCase();
+          const unameHtml = u.username
+            ? `<a href="https://t.me/${esc(u.username)}" target="_blank" class="mono" onclick="event.stopPropagation()">@${esc(u.username)}</a>`
+            : '<span>بدون يوزر</span>';
+
+          let statusBadge = '';
+          if (u.is_active) {
+            statusBadge = '<span class="badge badge-green">🟢 متواجد</span>';
+          } else if (u.status === 'deactivated') {
+            statusBadge = '<span class="badge badge-amber">⚠️ حساب محذوف</span>';
+          } else {
+            statusBadge = '<span class="badge badge-red">🚪 غادر البوت</span>';
+          }
+
+          const rulesBadge = renderRulesBadge(u.rules_status, u.joined_channels_count, u.required_channels_count);
+
+          // Affiliate attribution & points badges directly on the user row
+          let affBadgesHtml = '';
+          if ((u.points || 0) > 0 || (u.total_referrals_entered || 0) > 0) {
+            affBadgesHtml += `<div style="margin-top:0.25rem;"><span class="badge badge-amber">🏆 ${u.points || 0} نقطة • أدخل ${u.total_referrals_entered || 0} (${u.qualified_referrals_count || 0} فعّال)</span></div>`;
+          }
+          if (u.referred_by) {
+            const rOwner = u.referrer_username ? `@${u.referrer_username}` : (u.referrer_name || `#${u.referred_by}`);
+            const rTitle = u.referred_target_title || 'رابط إحالة';
+            const rQual = u.referral_qualified ? '✅' : '⏳';
+            affBadgesHtml += `<div style="margin-top:0.22rem; font-size:0.72rem; color:#fbbf24;" onclick="event.stopPropagation(); openUserModal(${u.referred_by})" title="اضغط لفتح ملف الداعي">🎯 دخل تبع <b>${esc(rOwner)}</b> عبر «${esc(rTitle)}» ${rQual}</div>`;
+          } else if (u.entry_source === 'direct_link') {
+            const dTitle = u.referred_target_title || 'رابط عمل';
+            const dCode = (u.referred_via_code && u.referred_via_code !== 'direct_link') ? ` (?start=${u.referred_via_code})` : '';
+            affBadgesHtml += `<div style="margin-top:0.22rem; font-size:0.72rem; color:#22d3ee;" title="ضغط على رابط فيلم منشور قبل الأفلييت بدون كود مسوق">📢 دخل من رابط عام بدون مسوق: <b>«${esc(dTitle)}»</b><span class="mono">${esc(dCode)}</span></div>`;
+          } else {
+            affBadgesHtml += `<div style="margin-top:0.22rem; font-size:0.71rem; color:var(--text-muted);">🤖 مصدر الدخول: فتح البوت مباشرة (/start بدون إحالة)</div>`;
+          }
+
+          // Build clear human-readable mini pills under the clickable interaction button
+          const pills = [];
+          if (u.movies_watched_count > 0) pills.push(`<span class="mini-pill">🎬 ${u.movies_watched_count} فيلم</span>`);
+          if (u.episodes_watched_count > 0) pills.push(`<span class="mini-pill">📺 ${u.episodes_watched_count} حلقة</span>`);
+          if (u.searches_count > 0) pills.push(`<span class="mini-pill">🔍 ${u.searches_count} بحث</span>`);
+          if (u.browses_count > 0) pills.push(`<span class="mini-pill">📂 ${u.browses_count} تصفح</span>`);
+          if (u.force_sub_blocks_count > 0 && u.rules_status !== 'compliant') {
+            pills.push(`<span class="mini-pill" style="color:#fca5a5;">🚧 أوقفه الحاجز ${u.force_sub_blocks_count}</span>`);
+          }
+          if (pills.length === 0) {
+            pills.push(`<span class="mini-pill" style="color:var(--text-muted);">👣 فتح البوت فقط بدون مشاهدة</span>`);
+          }
+
+          return `
+            <tr class="user-row" onclick="openUserModal(${u.user_id})">
+              <td>
+                <div class="user-cell">
+                  <div class="avatar">${esc(initial)}</div>
+                  <div>
+                    <div class="user-name">${esc(fullName)}</div>
+                    <div class="user-meta">${unameHtml} • <span class="mono">ID: ${u.user_id}</span></div>
+                    ${affBadgesHtml}
+                  </div>
+                </div>
+              </td>
+              <td>
+                ${statusBadge}
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.22rem;">انضم: ${fmtDate(u.joined_at)}</div>
+              </td>
+              <td>
+                ${rulesBadge}
+              </td>
+              <td>
+                <button type="button" class="interaction-btn" onclick="event.stopPropagation(); openUserModal(${u.user_id})">
+                  <span>📊 ${u.actions_count} خطوة تفاعل</span>
+                  <span style="font-size:0.72rem; opacity:0.9;">— اضغط للتفصيل 🔍</span>
+                </button>
+                <div class="mini-breakdown">${pills.join('')}</div>
+              </td>
+              <td>
+                <div style="font-weight:700; font-size:0.82rem;">${esc(u.last_action || 'فتح البوت')}</div>
+                <div style="font-size:0.74rem; color:var(--text-muted);">آخر ظهور: ${relTime(u.last_active_at)}</div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('users-page-info').textContent =
+        `إجمالي النتائج: ${data.total} — صفحة ${data.page} من ${totalUserPages}`;
+      document.getElementById('prev-page-btn').disabled = currentUserPage <= 1;
+      document.getElementById('next-page-btn').disabled = currentUserPage >= totalUserPages;
+    }
+
+    async function openUserModal(userId, refreshLive = false) {
+      openModalUserId = userId;
+      const modal = document.getElementById('user-detail-modal');
+      const body = document.getElementById('user-modal-body');
+      modal.style.display = 'flex';
+      body.innerHTML = `<div style="text-align:center; padding:2.5rem; color:var(--text-muted);">⏳ ${refreshLive ? 'جاري فحص اشتراكه المباشر في الجروبات عبر تيليجرام...' : 'جاري تحميل تفصيل تفاعل المستخدم والأفلييت...'}</div>`;
+
+      try {
+        const res = await apiFetch(`/v1/bot-admin/users/${userId}/details?refresh_live=${refreshLive ? 'true' : 'false'}`);
+        const u = res.user;
+        const aff = res.affiliate || {};
+        const refBy = aff.referred_by_info || null;
+        const invitedList = aff.invited_users || [];
+        const ptTxs = aff.point_transactions || [];
+        const br = res.breakdown || {};
+        const timeline = res.timeline || [];
+
+        const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'مستخدم بدون اسم';
+        const unameLink = u.username
+          ? `<a href="https://t.me/${esc(u.username)}" target="_blank" class="mono" style="color:#60a5fa;">@${esc(u.username)}</a>`
+          : 'بدون يوزر';
+        const botStateBadge = u.is_active
+          ? '<span class="badge badge-green">🟢 متواجد بالبوت</span>'
+          : '<span class="badge badge-red">🚪 غادر / حظر البوت</span>';
+        const rulesBadge = renderRulesBadge(u.rules_status, u.joined_channels_count, u.required_channels_count);
+        const ptsBadge = `<span class="badge badge-amber">🏆 ${aff.points || 0} نقطة</span>`;
+
+        // Build plain-Arabic story summary
+        const totWatches = (u.movies_watched_count || 0) + (u.episodes_watched_count || 0);
+        let storyParts = [];
+        if (u.rules_status === 'compliant') {
+          storyParts.push(`✅ <b>التزم بالشروط بالكامل</b> واشترك في الجروبات (${u.joined_channels_count}/${u.required_channels_count})`);
+        } else if (u.rules_status === 'left_channel') {
+          storyParts.push(`🚪 <b>اشترك سابقاً ثم غادر أحد الجروبات</b> (حالياً ${u.joined_channels_count}/${u.required_channels_count})`);
+        } else if (u.rules_status === 'partial') {
+          storyParts.push(`⚠️ <b>اشترك بشكل جزئي</b> في ${u.joined_channels_count} من أصل ${u.required_channels_count} جروبات`);
+        } else if (u.rules_status === 'unsubscribed') {
+          storyParts.push(`❌ <b>لم يشترك في الجروبات الإجبارية</b> وتوقف عند شاشة الشروط`);
+        } else {
+          storyParts.push(`⏳ لم يتم فحص اشتراكه بالجروبات بعد (اضغط زر الفحص المباشر بالأعلى)`);
+        }
+
+        if (totWatches >= 2) {
+          storyParts.push(`🔥 <b>دخل واتفرج وكمّل المشاهدة</b> (${u.movies_watched_count} فيلم و ${u.episodes_watched_count} حلقة)`);
+        } else if (totWatches === 1) {
+          storyParts.push(`🍿 <b>شاهد عملاً واحداً</b> (${u.movies_watched_count ? 'فيلم واحد' : 'حلقة واحدة'})`);
+        } else {
+          storyParts.push(`👀 <b>لم يشاهد أي فيلم أو حلقة بعد</b>`);
+        }
+
+        if (u.searches_count > 0) storyParts.push(`بحث <b>${u.searches_count}</b> مرة`);
+        if (u.browses_count > 0) storyParts.push(`تصفح الأقسام <b>${u.browses_count}</b> مرة`);
+
+        // Referral / Entry Source Banner (always visible so no user's entry is ever ambiguous)
+        const entInfo = aff.entry_info || {};
+        let refSourceBannerHtml = '';
+        if (refBy) {
+          refSourceBannerHtml = `
+            <div style="background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.36); border-radius:12px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.84rem;">
+              🎯 <b>مصدر دخول هذا الشخص (إحالة أفلييت):</b> دخل عن طريق المسوق
+              <a href="javascript:void(0)" onclick="openUserModal(${refBy.referrer_user_id})" style="color:#fbbf24; font-weight:800;">${esc(refBy.referrer_name)}${refBy.referrer_username ? ` (@${esc(refBy.referrer_username)})` : ''}</a>
+              عبر رابط: <b>«${esc(refBy.target_title)}»</b> (<span class="mono">t.me/riva18_bot?start=${esc(refBy.referral_code)}</span>)
+              — الحالة: ${refBy.qualified ? '<span class="badge badge-green">✅ استخدم البوت وحصل الداعي على +1 نقطة</span>' : '<span class="badge badge-amber">⏳ لم يُفعّل النقطة بعد</span>'}
+            </div>
+          `;
+        } else if (entInfo.entry_source === 'direct_link') {
+          const dCode = (entInfo.referral_code && entInfo.referral_code !== 'direct_link')
+            ? ` (<span class="mono">t.me/riva18_bot?start=${esc(entInfo.referral_code)}</span>)`
+            : '';
+          refSourceBannerHtml = `
+            <div style="background:rgba(6, 182, 212, 0.11); border:1px solid rgba(6, 182, 212, 0.34); border-radius:12px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.84rem;">
+              📢 <b>مصدر دخول هذا الشخص:</b> ضغط على <b>رابط عام منشور بدون كود مسوق</b> لـ <b>«${esc(entInfo.target_title || 'عمل فني')}»</b>${dCode} — لذلك لا يندرج تحت نقاط مسوق معين.
+            </div>
+          `;
+        } else {
+          refSourceBannerHtml = `
+            <div style="background:rgba(148, 163, 184, 0.08); border:1px solid rgba(148, 163, 184, 0.25); border-radius:12px; padding:0.7rem 1rem; margin-bottom:1rem; font-size:0.83rem;">
+              🤖 <b>مصدر دخول هذا الشخص:</b> فتح البوت مباشرة عبر <span class="mono">/start</span> (بحث عن <span class="mono">@riva18_bot</span> أو دخل مباشرة بدون كود إحالة).
+            </div>
+          `;
+        }
+
+        // Invited users HTML
+        const invitedHtml = invitedList.length === 0
+          ? `<div style="color:var(--text-muted); font-size:0.81rem;">لم يدخل أي شخص عبر روابط هذا المستخدم بعد.</div>`
+          : invitedList.map(inv => {
+              const nm = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || `User ${inv.user_id}`;
+              const un = inv.username ? `(@${esc(inv.username)})` : `#${inv.user_id}`;
+              const st = inv.status === 'qualified'
+                ? '<span class="badge badge-green">+1 نقطة ✅</span>'
+                : '<span class="badge badge-amber">⏳ معلق</span>';
+              return `
+                <div class="check-item" style="cursor:pointer;" onclick="openUserModal(${inv.user_id})">
+                  <div>
+                    <b>👤 ${esc(nm)}</b> <span class="mono" style="font-size:0.74rem; color:#60a5fa;">${un}</span>
+                    <div style="font-size:0.74rem; color:var(--text-muted);">عبر: <b>${esc(inv.target_title)}</b> (<span class="mono">?start=${esc(inv.referral_code)}</span>)</div>
+                  </div>
+                  <div style="text-align:left;">
+                    ${st}
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem;">${relTime(inv.created_at)}</div>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+        const txHtml = ptTxs.length === 0
+          ? ''
+          : `
+            <div style="margin-top:0.75rem;">
+              <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-bottom:0.35rem;">📒 آخر حركات رصيد النقاط:</div>
+              <div style="max-height:130px; overflow-y:auto;">
+                ${ptTxs.map(t => `
+                  <div class="check-item" style="padding:0.38rem 0.65rem; font-size:0.77rem;">
+                    <span><b class="mono" style="color:${t.delta >= 0 ? '#34d399' : '#f87171'};">${t.delta >= 0 ? '+' + t.delta : t.delta}</b> — ${esc(t.reason)}</span>
+                    <span class="mono" style="color:var(--text-muted);">الرصيد: ${t.balance_after} • ${relTime(t.created_at)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+
+        // Channels checklist
+        const chs = u.channels_list || [];
+        const chHtml = chs.length === 0
+          ? `<div style="color:var(--text-muted); font-size:0.82rem;">اضغط على «🔍 فحص اشتراكه بالجروبات الآن» للتحقق اللحظي من تيليجرام.</div>`
+          : chs.map(c => `
+              <div class="check-item">
+                <a href="${esc(c.invite_link || '#')}" target="_blank" style="color:#e2e8f0; text-decoration:none; font-weight:700;">📢 ${esc(c.title)}</a>
+                ${c.joined
+                  ? '<span class="badge badge-green">✅ مشترك</span>'
+                  : '<span class="badge badge-red">❌ غير مشترك</span>'}
+              </div>
+            `).join('');
+
+        // Watched movies & episodes list
+        const allWatched = [...(br.watched_movies || []), ...(br.watched_episodes || [])];
+        const watchesHtml = allWatched.length === 0
+          ? `<div style="color:var(--text-muted); font-size:0.82rem;">لم يقم بطلب/مشاهدة أي فيلم أو حلقة مسجلة حتى الآن.</div>`
+          : allWatched.map(w => `
+              <div class="watch-pill-item">
+                <span>${w.event_type === 'watch_movie' ? '🎬' : '📺'} <b>${esc(w.details || 'مشاهدة')}</b></span>
+                <span class="feed-time">${fmtDate(w.created_at)}</span>
+              </div>
+            `).join('');
+
+        const searchesArr = br.searches || [];
+        const searchesHtml = searchesArr.length === 0
+          ? ''
+          : `<div style="margin-top:0.65rem; font-size:0.8rem; color:#fbbf24;">🔍 ما بحث عنه: ${searchesArr.map(s => `<span class="mini-pill">${esc(s.details)}</span>`).join(' ')}</div>`;
+
+        // Timeline badges
+        const evBadgeMap = {
+          joined: '<span class="badge badge-green">🟢 انضم للبوت</span>',
+          left: '<span class="badge badge-red">🚪 غادر البوت</span>',
+          rejoined: '<span class="badge badge-blue">🔄 عاد للبوت</span>',
+          affiliate_entered: '<span class="badge badge-amber">🔗 دخل عبر أفلييت</span>',
+          affiliate_qualified: '<span class="badge badge-green">🏆 ربح +1 نقطة أفلييت</span>',
+          points_adjusted: '<span class="badge badge-purple">⚖️ تعديل نقاط</span>',
+          rules_passed: '<span class="badge badge-green">✅ أتم شروط الجروبات</span>',
+          rules_shown: '<span class="badge badge-amber">🚧 ظهرت له شاشة الشروط</span>',
+          rules_failed: '<span class="badge badge-red">❌ ضغط تحقق بدون اشتراك</span>',
+          rules_left_channel: '<span class="badge badge-red">🚪 غادر جروب إجباري</span>',
+          watch_movie: '<span class="badge badge-purple">🎬 شاهد فيلم</span>',
+          watch_episode: '<span class="badge badge-purple">📺 شاهد حلقة</span>',
+          search: '<span class="badge badge-amber">🔍 بحث</span>',
+          browse: '<span class="badge badge-cyan">📂 تصفح قسم</span>'
+        };
+
+        const timelineHtml = timeline.length === 0
+          ? `<div style="color:var(--text-muted); font-size:0.82rem;">لا توجد خطوات مفصلة مسجلة قبل التحديث؛ آخر نشاط معروف: <b>${esc(u.last_action)}</b>.</div>`
+          : timeline.map(ev => `
+              <div class="feed-item" style="padding:0.55rem 0.75rem;">
+                <div>
+                  <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                    ${evBadgeMap[ev.event_type] || `<span class="badge badge-blue">${esc(ev.event_type)}</span>`}
+                    <span style="font-size:0.82rem; font-weight:600;">${esc(ev.details || '')}</span>
+                  </div>
+                </div>
+                <div class="feed-time">${fmtDate(ev.created_at)}</div>
+              </div>
+            `).join('');
+
+        body.innerHTML = `
+          <div class="modal-top">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; margin-bottom:0.3rem;">
+                <h3 style="font-size:1.2rem; font-weight:800;">👤 ${esc(fullName)}</h3>
+                ${botStateBadge}
+                ${rulesBadge}
+                ${ptsBadge}
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted);">
+                ${unameLink} • <span class="mono">ID: ${u.user_id}</span> • انضم: ${fmtDate(u.joined_at)} • آخر ظهور: ${relTime(u.last_active_at)}
+              </div>
+            </div>
+            <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
+              <button class="btn btn-success" onclick="openUserModal(${u.user_id}, true)">🔍 فحص اشتراكه بالجروبات الآن</button>
+              <button class="btn btn-ghost" onclick="closeUserModal()">✖ إغلاق</button>
+            </div>
+          </div>
+
+          ${refSourceBannerHtml}
+
+          <div class="modal-story">
+            💡 <b>ملخص تفاعل هذا المستخدم:</b> ${storyParts.join(' — ')}.
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">
+              إجمالي خطواته المسجلة في البوت (<b>${u.actions_count}</b> خطوة): تشمل فتح البوت، تصفح القوائم، البحث، وطلب الأفلام والحلقات.
+            </div>
+          </div>
+
+          <div class="modal-stats-row">
+            <div class="modal-stat-card">
+              <div class="num" style="color:#c4b5fd;">${u.movies_watched_count}</div>
+              <div class="lbl">🎬 أفلام شاهدها</div>
+            </div>
+            <div class="modal-stat-card">
+              <div class="num" style="color:#60a5fa;">${u.episodes_watched_count}</div>
+              <div class="lbl">📺 حلقات شاهدها</div>
+            </div>
+            <div class="modal-stat-card">
+              <div class="num" style="color:#fbbf24;">${u.searches_count}</div>
+              <div class="lbl">🔍 عمليات بحث</div>
+            </div>
+            <div class="modal-stat-card">
+              <div class="num" style="color:#34d399;">${u.browses_count} <span style="font-size:0.82rem; color:var(--text-muted);">/ ${u.actions_count}</span></div>
+              <div class="lbl">📂 تصفح أقسام / كل النقرات</div>
+            </div>
+          </div>
+
+          <!-- Affiliate & Points Box inside User Modal -->
+          <div class="sub-box" style="margin-bottom:1rem; border-color:rgba(245, 158, 11, 0.32);">
+            <div class="sub-box-title" style="flex-wrap:wrap; gap:0.5rem;">
+              <span>🎁 رصيد النقاط والأشخاص الذين أدخلهم (${aff.qualified_referrals_count || 0} استخدم البوت من أصل ${aff.total_referrals_entered || 0})</span>
+              <button type="button" class="btn btn-ghost" style="padding:0.25rem 0.65rem; font-size:0.75rem;" onclick="copyTextClip('${esc(aff.personal_redirect_url || '')}', 'رابط الإحالة الشخصي')">📋 نسخ رابط دعوته العام</button>
+            </div>
+            <form onsubmit="submitModalPointsAdjust(event, ${u.user_id})" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.8rem; background:rgba(255,255,255,0.025); padding:0.6rem; border-radius:10px;">
+              <span style="font-size:0.8rem; font-weight:700;">⚖️ تعديل النقاط:</span>
+              <input id="modal-pts-delta" type="number" class="input-field mono" style="width:95px; padding:0.42rem 0.6rem; font-size:0.84rem;" placeholder="+5 أو -2" required />
+              <input id="modal-pts-reason" type="text" class="input-field" style="flex:1; min-width:160px; padding:0.42rem 0.7rem; font-size:0.82rem;" placeholder="سبب الإضافة أو الخصم..." />
+              <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.76rem; color:var(--text-muted); cursor:pointer;">
+                <input id="modal-pts-notify" type="checkbox" checked /> إشعاره بالبوت
+              </label>
+              <button type="submit" class="btn btn-primary" style="padding:0.42rem 0.85rem; font-size:0.8rem;">💾 حفظ</button>
+            </form>
+            <div style="max-height:185px; overflow-y:auto;">${invitedHtml}</div>
+            ${txHtml}
+          </div>
+
+          <div class="modal-grid-2">
+            <div class="sub-box">
+              <div class="sub-box-title">
+                <span>📢 اشتراكه في الجروبات الإجبارية</span>
+                <span style="font-size:0.75rem; color:var(--text-muted);">أوقفه الحاجز: ${u.force_sub_blocks_count} مرة</span>
+              </div>
+              ${chHtml}
+            </div>
+
+            <div class="sub-box">
+              <div class="sub-box-title">
+                <span>🍿 الأفلام والحلقات التي شاهدها</span>
+                ${totWatches >= 2 ? '<span class="badge badge-purple">🔥 كمّل المشاهدة</span>' : ''}
+              </div>
+              <div style="max-height:190px; overflow-y:auto;">${watchesHtml}</div>
+              ${searchesHtml}
+            </div>
+          </div>
+
+          <div class="sub-box">
+            <div class="sub-box-title">
+              <span>🕒 خط سير المستخدم داخل البوت بالتفصيل (الأحدث أولاً)</span>
+              <span style="font-size:0.76rem; color:var(--text-muted);">آخر نشاط: ${esc(u.last_action)}</span>
+            </div>
+            <div class="feed-list" style="max-height:240px;">${timelineHtml}</div>
+          </div>
+        `;
+
+        if (refreshLive) {
+          loadOverview();
+          loadUsers(currentUserPage);
+        }
+      } catch (e) {
+        body.innerHTML = `
+          <div style="text-align:center; padding:2rem; color:#f87171;">
+            ⚠️ تعذر جلب تفاصيل المستخدم: ${esc(e.message)}
+            <div style="margin-top:1rem;"><button class="btn btn-ghost" onclick="closeUserModal()">إغلاق</button></div>
+          </div>
+        `;
+      }
+    }
+
+    function closeUserModal() {
+      openModalUserId = null;
+      document.getElementById('user-detail-modal').style.display = 'none';
+    }
+
+    function closeUserModalOnBackdrop(e) {
+      if (e.target && e.target.id === 'user-detail-modal') closeUserModal();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && openModalUserId !== null) closeUserModal();
+    });
+
+    async function loadEvents() {
+      const ef = document.getElementById('event-filter').value;
+      const data = await apiFetch('/v1/bot-admin/events?limit=45&event_type=' + encodeURIComponent(ef));
+      const el = document.getElementById('events-feed');
+
+      const mapBadge = {
+        joined: '<span class="badge badge-green">🟢 انضمام جديد</span>',
+        left: '<span class="badge badge-red">🚪 غادر / حظر</span>',
+        rejoined: '<span class="badge badge-blue">🔄 عاد للبوت</span>',
+        affiliate_entered: '<span class="badge badge-amber">🔗 دخل عبر أفلييت</span>',
+        affiliate_qualified: '<span class="badge badge-green">🏆 +1 نقطة أفلييت</span>',
+        points_adjusted: '<span class="badge badge-purple">⚖️ تعديل نقاط</span>',
+        rules_passed: '<span class="badge badge-green">✅ التزم بالجروبات</span>',
+        rules_shown: '<span class="badge badge-amber">🚧 حاجز الشروط</span>',
+        rules_failed: '<span class="badge badge-red">❌ لم يكمل الشروط</span>',
+        rules_left_channel: '<span class="badge badge-red">🚪 غادر جروب</span>',
+        watch_movie: '<span class="badge badge-purple">🎬 مشاهدة فيلم</span>',
+        watch_episode: '<span class="badge badge-purple">📺 مشاهدة حلقة</span>',
+        search: '<span class="badge badge-amber">🔍 بحث</span>',
+        browse: '<span class="badge badge-cyan">📂 تصفح قسم</span>'
+      };
+
+      if (!data.events || data.events.length === 0) {
+        el.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:2rem;">لا توجد أحداث مطابقة لهذا الفلتر بعد — ستظهر فوراً مع تفاعل المستخدمين.</div>';
+        return;
+      }
+
+      el.innerHTML = data.events.map(ev => {
+        const b = mapBadge[ev.event_type] || '<span class="badge badge-blue">نشاط</span>';
+        const un = ev.username ? `<span class="mono" style="color:#60a5fa;">@${esc(ev.username)}</span>` : `<span class="mono">#${ev.user_id}</span>`;
+        return `
+          <div class="feed-item clickable" onclick="openUserModal(${ev.user_id})" title="اضغط لعرض ملف هذا المستخدم وتفاصيل تفاعله">
+            <div>
+              <div style="display:flex; gap:0.45rem; align-items:center; flex-wrap:wrap;">
+                ${b}
+                <span class="feed-title">${esc(ev.first_name)}</span>
+                ${un}
+              </div>
+              ${ev.details ? `<div class="feed-sub">${esc(ev.details)}</div>` : ''}
+            </div>
+            <div class="feed-time">${relTime(ev.created_at)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setUserTab(status) {
+      currentStatusTab = status;
+      document.querySelectorAll('#user-tabs .tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.status === status);
+      });
+      loadUsers(1);
+    }
+
+    function jumpToUserFilter(status) {
+      setUserTab(status);
+      document.getElementById('users-section-anchor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function filterTimelineTo(filterVal) {
+      const sel = document.getElementById('event-filter');
+      sel.value = filterVal;
+      loadEvents();
+      document.getElementById('timeline-panel-anchor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function changeUserPage(delta) {
+      const next = currentUserPage + delta;
+      if (next >= 1 && next <= totalUserPages) loadUsers(next);
+    }
+
+    function debouncedLoadUsers() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadUsers(1), 320);
+    }
+
+    async function runSilentScan() {
+      const btn = document.getElementById('scan-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ جاري الفحص الشامل...';
+      try {
+        const res = await apiFetch('/v1/bot-admin/scan-users', { method: 'POST' });
+        showToast(
+          `✅ اكتمل الفحص الشامل لـ ${res.checked} مستخدم: النشطون بالبوت ${res.active} | ملتزمون بكل الجروبات ${res.compliant} | غير ملتزمين بالشروط ${res.non_compliant} | غادروا البوت ${res.left}`
+        );
+        await refreshAll(false);
+      } catch (e) {
+        alert('تعذر إتمام الفحص: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍 فحص شامل (نشاط + جروبات)';
+      }
+    }
+
+    async function toggleNotifications() {
+      try {
+        const res = await apiFetch('/v1/bot-admin/toggle-notifications', { method: 'POST' });
+        showToast(res.notify_admin_events
+          ? '🔔 تم تفعيل إشعارات الدخول والخروج اللحظية على تيليجرام'
+          : '🔕 تم إيقاف إشعارات الدخول والخروج على تيليجرام');
+        await loadOverview();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    let currentVaultChannelId = '';
+
+    async function loadWorkers() {
+      const data = await apiFetch('/v1/bot-admin/workers');
+      currentVaultChannelId = data.channel_id || '';
+      document.getElementById('vault-channel-id-lbl').textContent = currentVaultChannelId || '—';
+
+      const sum = data.summary || {};
+      const pb = data.primary_bot || {};
+      const workers = data.workers || [];
+
+      document.getElementById('workers-pool-badge').textContent = `${sum.active_pool_size || 1} بوت نشط بالتوازي`;
+      document.getElementById('workers-inflight-badge').textContent = `يرفع الآن: ${sum.total_inflight || 0} فيديو`;
+
+      const cards = [];
+
+      // Primary Bot Card
+      cards.push(`
+        <div class="sub-box" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(37, 99, 235, 0.08);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.45rem;">
+            <div style="font-weight:800; font-size:0.9rem;">👑 @${esc(pb.username || 'riva18_bot')}</div>
+            <span class="badge badge-blue">البوت الأساسي</span>
+          </div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.45rem;">
+            متصل دائماً • يشارك في الرفع والتوزيع
+          </div>
+          <div style="display:flex; gap:0.45rem; flex-wrap:wrap; font-size:0.76rem;">
+            <span class="badge ${pb.inflight > 0 ? 'badge-green' : 'badge-cyan'}">⚡ يرفع الآن: ${pb.inflight || 0}</span>
+            <span class="mini-pill">📦 رفع: <b>${pb.uploads_count || 0}</b> عمل (${pb.uploaded_gb || 0} GB)</span>
+          </div>
+        </div>
+      `);
+
+      // Helper Worker Bot Cards
+      for (const w of workers) {
+        const uname = w.bot_username ? `@${esc(w.bot_username)}` : esc(w.bot_name || `Bot #${w.id}`);
+        let stBadge = '';
+        if (!w.is_active) {
+          stBadge = '<span class="badge badge-amber">⏸ متوقف مؤقتاً</span>';
+        } else if (w.channel_ok) {
+          stBadge = '<span class="badge badge-green">🟢 نشط وأدمن بالقناة</span>';
+        } else {
+          stBadge = '<span class="badge badge-red">🟡 يحتاج ترقية أدمن بالقناة</span>';
+        }
+
+        const errLine = (w.is_active && !w.channel_ok && w.last_error)
+          ? `<div style="font-size:0.74rem; color:#fca5a5; margin-top:0.35rem;">⚠️ ${esc(w.last_error)}</div>`
+          : '';
+
+        cards.push(`
+          <div class="sub-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
+              <div>
+                <div style="font-weight:800; font-size:0.9rem;">🤖 ${uname}</div>
+                <div style="font-size:0.73rem; color:var(--text-muted);">${esc(w.bot_name || '')} • <span class="mono">${esc(w.masked_token)}</span></div>
+              </div>
+              ${stBadge}
+            </div>
+            <div style="display:flex; gap:0.45rem; flex-wrap:wrap; font-size:0.76rem; margin-top:0.45rem;">
+              <span class="badge ${w.inflight > 0 ? 'badge-green' : 'badge-cyan'}">⚡ يرفع الآن: ${w.inflight || 0}</span>
+              <span class="mini-pill">📦 رفع: <b>${w.uploads_count || 0}</b> عمل (${w.uploaded_gb || 0} GB)</span>
+              ${w.last_used_at ? `<span class="mini-pill">🕒 ${relTime(w.last_used_at)}</span>` : ''}
+            </div>
+            ${errLine}
+            <div style="display:flex; gap:0.45rem; margin-top:0.65rem;">
+              <button type="button" class="btn btn-ghost" style="flex:1; padding:0.36rem 0.6rem; font-size:0.77rem;" onclick="toggleWorkerBot(${w.id})">
+                ${w.is_active ? '⏸ إيقاف مؤقت' : '▶️ تفعيل الرفع'}
+              </button>
+              <button type="button" class="btn btn-danger" style="padding:0.36rem 0.65rem; font-size:0.77rem;" onclick="deleteWorkerBot(${w.id}, '${uname}')">
+                🗑 حذف
+              </button>
+            </div>
+          </div>
+        `);
+      }
+
+      document.getElementById('workers-cards-grid').innerHTML = cards.join('');
+    }
+
+    async function submitWorkerTokens(e) {
+      e.preventDefault();
+      const inp = document.getElementById('worker-tokens-input');
+      const btn = document.getElementById('add-workers-btn');
+      const val = inp.value.trim();
+      if (!val) return;
+      btn.disabled = true;
+      btn.textContent = '⏳ جاري الفحص والتفعيل...';
+      try {
+        const res = await apiFetch('/v1/bot-admin/workers', {
+          method: 'POST',
+          body: JSON.stringify({ tokens_text: val })
+        });
+        inp.value = '';
+        const addedCnt = (res.added || []).length;
+        const readyCnt = (res.added || []).filter(x => x.channel_ok).length;
+        const errCnt = (res.errors || []).length;
+        let msg = `✅ تم حفظ ${addedCnt} بوت وركر بنجاح (${readyCnt} نشط وأدمن بالقناة الآن)`;
+        if (addedCnt > readyCnt) {
+          msg += ` — تذكير: قم بترقية البوت المتبقي كمشرف (Post Messages) في القناة ${currentVaultChannelId}`;
+        }
+        if (errCnt > 0) {
+          msg += ` | ⚠️ ${errCnt} توكن غير صالح`;
+        }
+        showToast(msg);
+        await loadWorkers();
+      } catch (err) {
+        alert('⚠️ ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '➕ إضافة وتفعيل الوركر فوراً';
+      }
+    }
+
+    async function recheckWorkerBots() {
+      const btn = document.getElementById('recheck-workers-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ جاري الفحص...';
+      try {
+        const res = await apiFetch('/v1/bot-admin/workers/recheck', { method: 'POST' });
+        showToast(`🔄 تم فحص ${res.checked} بوت وركر: ${res.ready} يمتلك صلاحية النشر بالقناة الآن!`);
+        await loadWorkers();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 فحص صلاحية القناة للكل';
+      }
+    }
+
+    async function toggleWorkerBot(workerId) {
+      try {
+        await apiFetch(`/v1/bot-admin/workers/${workerId}/toggle`, { method: 'POST' });
+        await loadWorkers();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function deleteWorkerBot(workerId, label) {
+      if (!confirm(`هل تريد حذف البوت ${label} من قائمة الرفع المتوازي؟`)) return;
+      try {
+        await apiFetch(`/v1/bot-admin/workers/${workerId}`, { method: 'DELETE' });
+        showToast(`🗑 تم حذف ${label} بنجاح`);
+        await loadWorkers();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function copyVaultChannelId() {
+      if (!currentVaultChannelId) return;
+      navigator.clipboard.writeText(currentVaultChannelId).then(() => {
+        showToast(`📋 تم نسخ معرف قناة الأرشيف: ${currentVaultChannelId}`);
+      });
+    }
+
+    function exportUsersCsv() {
+      const url = `/v1/bot-admin/export-csv?status=${encodeURIComponent(currentStatusTab)}&password=${encodeURIComponent(adminPass)}`;
+      window.open(url, '_blank');
+    }
+
+    async function refreshAll(manual = false) {
+      try {
+        await Promise.all([loadOverview(), loadAffiliates(currentAffPage), loadWorkers(), loadUsers(currentUserPage), loadEvents()]);
+        if (manual) showToast('🔄 تم تحديث جميع البيانات والأفلييت والنقاط وحالة بوتات الرفع لحظياً');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function startLiveLoop() {
+      refreshAll(false);
+      if (refreshInterval) clearInterval(refreshInterval);
+      refreshInterval = setInterval(() => refreshAll(false), 10000);
+    }
+
+    // Auto-login if password saved
+    if (adminPass) {
+      document.getElementById('login-screen').style.display = 'none';
+      startLiveLoop();
+    }
+  </script>
+</body>
+</html>

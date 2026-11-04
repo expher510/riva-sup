@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     curl \
     ffmpeg \
+    aria2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,6 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application and worker source code
 COPY app/ ./app/
 COPY worker/ ./worker/
+COPY bot/ ./bot/
 
 # Ensure transit directory exists with proper permissions
 RUN mkdir -p /tmp/riva_transit && chmod 777 /tmp/riva_transit

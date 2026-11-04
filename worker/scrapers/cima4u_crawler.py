@@ -401,8 +401,7 @@ async def crawl_category(
                             if direct_streams:
                                 try:
                                     from worker.pipeline import process_episode_transit_pipeline
-                                    process_episode_transit_pipeline.delay(episode.id, direct_streams, quality="1080p")
-                                    logger.info(f"  🚀 Dispatched transit pipeline for Episode {episode.id} with {len(direct_streams)} candidate links")
+                                    # Dispatched strictly in order by batch_dispatcher
                                 except Exception as pipe_err:
                                     logger.warning(f"Could not dispatch transit pipeline for episode: {pipe_err}")
 
@@ -443,8 +442,7 @@ async def crawl_category(
                             if direct_streams:
                                 try:
                                     from worker.pipeline import process_video_transit_pipeline
-                                    process_video_transit_pipeline.delay(movie.id, direct_streams, quality="1080p")
-                                    logger.info(f"  🚀 Dispatched transit pipeline for Movie {movie.id} with {len(direct_streams)} candidate links")
+                                    # Dispatched strictly in order by batch_dispatcher
                                 except Exception as pipe_err:
                                     logger.warning(f"Could not dispatch transit pipeline for movie: {pipe_err}")
 

@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db, engine, Base
 from app.models import Movie, StreamingLink, User, APIKey, Series, Season, Episode, ScraperCheckpoint, TelegramArchive
-from app.streamer import TelegramStreamer, render_html5_player
+from app.streamer import TelegramStreamer, render_html5_player, render_multi_server_player
 from app.schemas import (
     MovieDetailResponse, MovieMetadata, StreamItem,
     TrendingResponse, TrendingMovieItem,
@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.security import generate_api_key, hash_api_key
 from app.rate_limiter import verify_api_key, AuthenticatedAPIKey, get_redis
+from app.admin_dashboard import admin_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -577,24 +578,49 @@ async def embed_episode_player(
         select(Episode)
         .options(
             selectinload(Episode.season).selectinload(Season.series),
-            selectinload(Episode.telegram_archives)
+            selectinload(Episode.telegram_archives),
+            selectinload(Episode.streaming_links)
         )
         .where(Episode.id == episode_id)
     )
     ep = (await db.execute(stmt)).scalars().first()
-    if not ep or not ep.telegram_archives:
-        raise HTTPException(status_code=404, detail="Episode video player not ready")
+    if not ep:
+        raise HTTPException(status_code=404, detail="Episode not found")
 
     series_name = ep.season.series.title if ep.season and ep.season.series else "مسلسل"
     s_num = ep.season.season_number if ep.season else 1
-    stream_url = f"/v1/stream/video/episode/{ep.id}"
     poster_url = ep.season.series.poster_path if ep.season and ep.season.series else None
+    ep_title = f"{series_name} - الموسم {s_num} الحلقة {ep.episode_number}"
 
-    html_content = render_html5_player(
-        title=f"{series_name} - الموسم {s_num} الحلقة {ep.episode_number}",
-        stream_url=stream_url,
-        poster_url=poster_url,
-        subtitle=ep.title
+    servers = []
+    # 1. VIP Direct Stream from Telegram Master Vault (if available)
+    if ep.telegram_archives:
+        servers.append({
+            "provider": "riva-server",
+            "name": "⚡ Riva VIP (سيرفر مباشر)",
+            "embed_url": f"/v1/stream/video/episode/{ep.id}",
+            "is_direct": True
+        })
+
+    # 2. Add all active mirror streaming links (HGCloud, Playmogo, Mixdrop, etc.)
+    for s in ep.streaming_links:
+        if s.status == "active" and s.embed_url:
+            p_name = s.provider_name.capitalize()
+            servers.append({
+                "provider": s.provider_name,
+                "name": f"سيرفر {p_name} ({s.quality})",
+                "embed_url": s.embed_url,
+                "is_direct": False
+            })
+
+    if not servers:
+        raise HTTPException(status_code=404, detail="Episode video player not ready")
+
+    html_content = render_multi_server_player(
+        title=ep_title,
+        servers=servers,
+        subtitle=ep.title,
+        poster_url=poster_url
     )
     return HTMLResponse(content=html_content)
 
@@ -606,21 +632,47 @@ async def embed_movie_player(
 ):
     stmt = (
         select(Movie)
-        .options(selectinload(Movie.telegram_archives))
+        .options(
+            selectinload(Movie.telegram_archives),
+            selectinload(Movie.streaming_links)
+        )
         .where(Movie.id == movie_id)
     )
     m = (await db.execute(stmt)).scalars().first()
-    if not m or not m.telegram_archives:
-        raise HTTPException(status_code=404, detail="Movie video player not ready")
+    if not m:
+        raise HTTPException(status_code=404, detail="Movie not found")
 
-    stream_url = f"/v1/stream/video/movie/{m.id}"
     poster = f"{TMDB_IMAGE_BASE}/w500{m.poster_path}" if m.poster_path and m.poster_path.startswith("/") else m.poster_path
 
-    html_content = render_html5_player(
+    servers = []
+    # 1. VIP Direct Stream from Telegram Master Vault (if available)
+    if m.telegram_archives:
+        servers.append({
+            "provider": "riva-server",
+            "name": "⚡ Riva VIP (سيرفر مباشر)",
+            "embed_url": f"/v1/stream/video/movie/{m.id}",
+            "is_direct": True
+        })
+
+    # 2. Add all active mirror streaming links
+    for s in m.streaming_links:
+        if s.status == "active" and s.embed_url:
+            p_name = s.provider_name.capitalize()
+            servers.append({
+                "provider": s.provider_name,
+                "name": f"سيرفر {p_name} ({s.quality})",
+                "embed_url": s.embed_url,
+                "is_direct": False
+            })
+
+    if not servers:
+        raise HTTPException(status_code=404, detail="Movie video player not ready")
+
+    html_content = render_multi_server_player(
         title=m.title,
-        stream_url=stream_url,
-        poster_url=poster,
-        subtitle=f"سنة الإنتاج: {m.year}" if m.year else None
+        servers=servers,
+        subtitle=f"سنة الإنتاج: {m.year}" if m.year else None,
+        poster_url=poster
     )
     return HTMLResponse(content=html_content)
 
@@ -754,8 +806,8 @@ async def ingest_episode(req: IngestEpisodeRequest, db: AsyncSession = Depends(g
     if candidate_streams:
         try:
             from worker.pipeline import process_episode_transit_pipeline
-            process_episode_transit_pipeline.delay(episode.id, candidate_streams, quality="1080p")
-            dispatched = True
+            # Queued for ordered dispatch by batch_dispatcher
+            dispatched = False
         except Exception:
             pass
 
@@ -808,8 +860,8 @@ async def ingest_movie(req: IngestMovieRequest, db: AsyncSession = Depends(get_d
     if candidate_streams:
         try:
             from worker.pipeline import process_video_transit_pipeline
-            process_video_transit_pipeline.delay(movie.id, candidate_streams, quality="1080p")
-            dispatched = True
+            # Queued for ordered dispatch by batch_dispatcher
+            dispatched = False
         except Exception:
             pass
 
@@ -827,6 +879,7 @@ if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.include_router(admin_router)
 
 @app.get("/", response_class=FileResponse, include_in_schema=False)
 async def serve_index():

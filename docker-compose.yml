@@ -3,6 +3,13 @@ services:
     image: postgres:16-alpine
     container_name: riva_postgres
     restart: unless-stopped
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=8MB
+      -c max_connections=150
+      -c jit=off
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-riva_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-riva_secure_password}
@@ -21,7 +28,7 @@ services:
     image: redis:7-alpine
     container_name: riva_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secure_password}"]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "", "--requirepass", "${REDIS_PASSWORD:-redis_secure_password}"]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,7 +45,7 @@ services:
       dockerfile: Dockerfile
     container_name: riva_api
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips="*"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-2} --proxy-headers --forwarded-allow-ips="*" --no-access-log
     environment:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
@@ -48,6 +55,7 @@ services:
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - BOT_ADMIN_PASSWORD=${BOT_ADMIN_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,7 +72,7 @@ services:
       dockerfile: Dockerfile
     container_name: riva_worker
     restart: unless-stopped
-    command: celery -A worker.celery_app.celery_app worker --loglevel=info --concurrency=4
+    command: nice -n 10 celery -A worker.celery_app.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY:-5} -O fair --without-gossip --without-mingle --without-heartbeat
     environment:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
@@ -73,13 +81,21 @@ services:
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
       - TMDB_API_KEY=${TMDB_API_KEY}
-      - DOODSTREAM_API_KEY=${DOODSTREAM_API_KEY}
-      - STREAMTAPE_API_LOGIN=${STREAMTAPE_API_LOGIN}
-      - STREAMTAPE_API_KEY=${STREAMTAPE_API_KEY}
+      - ENABLE_EXTERNAL_STREAM_UPLOAD=0
+      - TURKISH_PRIORITY_ONLY=1
+      - SERIES_VIRAL_PRIORITY_ENABLED=1
+      - MOVIE_VIRAL_PRIORITY_ENABLED=1
+      - MAX_CONCURRENT_MOVIE_JOBS=${MAX_CONCURRENT_MOVIE_JOBS:-2}
+      - MAX_CONCURRENT_SERIES_CHAINS=${MAX_CONCURRENT_SERIES_CHAINS:-3}
+      - HLS_PARALLEL_WORKERS=${HLS_PARALLEL_WORKERS:-8}
+      - TELEGRAM_UPLOAD_WORKERS=${TELEGRAM_UPLOAD_WORKERS:-3}
+      - FFMPEG_ENCODE_THREADS=${FFMPEG_ENCODE_THREADS:-2}
+      - PYTHONDONTWRITEBYTECODE=1
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - BOT_ADMIN_PASSWORD=${BOT_ADMIN_PASSWORD}
       - TRANSIT_TEMP_DIR=/tmp/riva_transit
     volumes:
       - transit_scratch:/tmp/riva_transit
@@ -97,7 +113,7 @@ services:
       dockerfile: Dockerfile
     container_name: riva_orchestrator
     restart: unless-stopped
-    command: python -m worker.orchestrator
+    command: nice -n 5 python -m worker.orchestrator
     environment:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-riva_user}:${POSTGRES_PASSWORD:-riva_secure_password}@postgres:5432/${POSTGRES_DB:-riva_db}
@@ -106,13 +122,18 @@ services:
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
       - TMDB_API_KEY=${TMDB_API_KEY}
-      - DOODSTREAM_API_KEY=${DOODSTREAM_API_KEY}
-      - STREAMTAPE_API_LOGIN=${STREAMTAPE_API_LOGIN}
-      - STREAMTAPE_API_KEY=${STREAMTAPE_API_KEY}
+      - ENABLE_EXTERNAL_STREAM_UPLOAD=0
+      - TURKISH_PRIORITY_ONLY=1
+      - SERIES_VIRAL_PRIORITY_ENABLED=1
+      - MOVIE_VIRAL_PRIORITY_ENABLED=1
+      - MAX_CONCURRENT_MOVIE_JOBS=${MAX_CONCURRENT_MOVIE_JOBS:-2}
+      - MAX_CONCURRENT_SERIES_CHAINS=${MAX_CONCURRENT_SERIES_CHAINS:-3}
+      - ORCH_TICK_SECONDS=${ORCH_TICK_SECONDS:-40}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - BOT_ADMIN_PASSWORD=${BOT_ADMIN_PASSWORD}
       - TRANSIT_TEMP_DIR=/tmp/riva_transit
     volumes:
       - transit_scratch:/tmp/riva_transit
@@ -123,6 +144,32 @@ services:
         condition: service_healthy
     networks:
       - riva_internal_net
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riva_bot
+    restart: unless-stopped
+    command: python -m bot.main
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_USER=${POSTGRES_USER:-riva_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-riva_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-riva_db}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - BOT_ADMIN_PASSWORD=${BOT_ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - riva_internal_net
+
 
 volumes:
   postgres_data:
