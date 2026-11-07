@@ -97,7 +97,47 @@ def _get_vip_series_ids(session) -> List[int]:
             vip_ids.add(int(r[0]))
     except Exception:
         pass
+    try:
+        # Marvel series wait for ALL Marvel movies (that have links) to finish uploading first.
+        marvel_series = {
+            int(x.decode() if isinstance(x, bytes) else x)
+            for x in (redis_sync.smembers("riva:marvel_series_ids") or [])
+            if str(x.decode() if isinstance(x, bytes) else x).strip().isdigit()
+        }
+        if marvel_series:
+            if _marvel_movies_pending(session):
+                vip_ids -= marvel_series
+            else:
+                vip_ids |= marvel_series
+    except Exception:
+        pass
     return sorted(vip_ids)
+
+
+def _marvel_movies_pending(session) -> bool:
+    """True while any Marvel catalog movie that has live links is still not archived in the Vault."""
+    try:
+        ranks = redis_sync.hkeys("riva:marvel_rank") or []
+        ids = [int(k.decode() if isinstance(k, bytes) else k) for k in ranks]
+        if not ids:
+            return False
+        rows = session.execute(text(f"""
+            SELECT m.id FROM movies m
+            WHERE m.id = ANY(:ids)
+              AND NOT EXISTS (SELECT 1 FROM telegram_archives ta WHERE ta.movie_id = m.id AND ta.file_size_bytes > 15000000)
+              AND EXISTS (
+                  SELECT 1 FROM streaming_links sl WHERE sl.movie_id = m.id
+                    AND coalesce(sl.status, 'active') = 'active'
+                    AND (sl.direct_url IS NOT NULL OR sl.embed_url IS NOT NULL)
+                    {SQL_UNSUPPORTED_FILTER}
+              );
+        """), {"ids": ids}).fetchall()
+        for (mid,) in rows:
+            if not redis_sync.exists(f"riva:movie_dead_cooldown:{mid}"):
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def _get_vip_movie_ids(session) -> set:
@@ -817,6 +857,15 @@ def dispatch_pending_movies(limit: int = 4) -> int:
     with SyncSession() as session:
         vip_movie_ids = _get_vip_movie_ids(session)
         try:
+            marvel_rank = {}
+            for k, v in (redis_sync.hgetall("riva:marvel_rank") or {}).items():
+                k = k.decode() if isinstance(k, bytes) else str(k)
+                v = v.decode() if isinstance(v, bytes) else str(v)
+                if k.isdigit() and v.isdigit():
+                    marvel_rank[int(k)] = int(v)
+        except Exception:
+            marvel_rank = {}
+        try:
             trending_tmdb_ids = {
                 int(str(x).strip())
                 for x in (redis_sync.smembers("riva:tmdb_trending_movie_ids") or [])
@@ -961,7 +1010,14 @@ def dispatch_pending_movies(limit: int = 4) -> int:
             if is_vip:
                 vip_only_items = [x for x in unarchived if x["id"] in vip_movie_ids]
                 for vip_it in vip_only_items:
-                    vip_units.append((-(viral_score + rating_score + 10000.0), "🎯 VIP", f"{f_key}:vip:{vip_it['id']}", False, [vip_it]))
+                    # Marvel catalog items carry a release-order rank (riva:marvel_rank, written by marvel_seeder)
+                    # so they upload first AND in strict release order (Iron Man -> Iron Man 2 -> Iron Man 3 ...).
+                    mv_rank = marvel_rank.get(vip_it["id"])
+                    if mv_rank is not None:
+                        vip_key = -(1_000_000.0 - mv_rank)
+                    else:
+                        vip_key = -(viral_score + rating_score + 10000.0)
+                    vip_units.append((vip_key, "🎯 VIP", f"{f_key}:vip:{vip_it['id']}", False, [vip_it]))
                 non_vip_remaining = [x for x in unarchived if x["id"] not in vip_movie_ids]
                 if not non_vip_remaining:
                     continue

@@ -71,3 +71,8 @@ temp/
 scratch/
 .DS_Store
 Thumbs.db
+
+# Node / Frontend
+node_modules/
+.vite/
+

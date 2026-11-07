@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     TELEGRAM_API_HASH: Optional[str] = None
     TELEGRAM_LOCAL_API_URL: Optional[str] = None
 
+    # Backup / Delivery Vault Mirror
+    # BACKUP_VAULT_CHANNEL_IDS — comma-separated list of delivery vault channel IDs
+    # e.g. "-1004488480136,-1009999999999"
+    # Every new upload to the Master Vault is auto-copyMessage'd to ALL channels here.
+    # Legacy single-value alias also accepted (BACKUP_VAULT_CHANNEL_ID).
+    BACKUP_VAULT_CHANNEL_IDS: str = ""   # preferred multi-channel key
+    BACKUP_VAULT_CHANNEL_ID: str = ""    # legacy single-channel alias (still read as fallback)
+    BACKUP_VAULT_BOT_TOKEN: str = ""     # bot that is admin in ALL delivery vaults (@Riva109_bot)
+
     TRANSIT_TEMP_DIR: str = "/tmp/riva_transit"
 
     # Cache TTLs (seconds)

@@ -236,6 +236,8 @@ def resolve_packed_hls_embed_with_referer(url: str, default_referer: str = "http
             default_referer = "https://a.qfilm.tv/"
         elif "egybestvid." in u_low:
             default_referer = "https://egydead.ca/"
+        elif "vidtube." in u_low:
+            default_referer = "https://topcinemaa.vip/"
 
         st, html, _, fin_u, sess = _session_get(url, referer=default_referer, timeout=12)
         if st != 200 or not html:
@@ -305,7 +307,7 @@ def resolve_hgcloud_with_referer(url: str) -> Optional[Tuple[str, str]]:
     Handles /embed/{code}, /e/{code}, /d/{code}, and bare /{code} URLs.
     """
     try:
-        code_match = re.search(r"/(?:embed|e|d|f|v)/([a-zA-Z0-9]{8,24})", url)
+        code_match = re.search(r"/(?:embed|e|d|f|v|file)/([a-zA-Z0-9]{8,24})", url)
         if not code_match:
             code_match = re.search(r"https?://[^/]+/([a-zA-Z0-9]{10,24})(?:[/?#]|$)", url)
         if not code_match:
@@ -315,11 +317,10 @@ def resolve_hgcloud_with_referer(url: str) -> Optional[Tuple[str, str]]:
         # Active unpackable mirrors for StreamHG / HGCloud / StreamWish / VidHide
         mirrors = ["vibuxer.com", "hanerix.com", "streamwish.to", "byseraguci.com"]
         orig_host = urlparse(url).netloc.lower().replace("www.", "")
-        candidate_embeds = []
-        if "/embed/" in url.lower():
-            candidate_embeds.append(url)
+        candidate_embeds = [url]  # Always try original URL first (/v/, /file/, etc.)
         if orig_host and orig_host not in ("hgcloud.to", "dhcplay.com", "vidhidevip.com") and orig_host not in mirrors:
             candidate_embeds.append(f"https://{orig_host}/e/{code}")
+            candidate_embeds.append(f"https://{orig_host}/v/{code}")
         for dom in mirrors:
             candidate_embeds.append(f"https://{dom}/e/{code}")
 
@@ -331,7 +332,7 @@ def resolve_hgcloud_with_referer(url: str) -> Optional[Tuple[str, str]]:
                     continue
                 low = html.lower()
                 if "file is no longer available" in low or "file was deleted" in low or "not found" in low[:600]:
-                    return None
+                    continue  # Try next mirror candidate instead of aborting
 
                 unpacked = _extract_unpacked_js(html)
                 search_space = (unpacked or "") + "\n" + html
@@ -616,17 +617,17 @@ def resolve_stream_with_headers(url: str) -> Tuple[str, str]:
         if res:
             return res
 
-    if any(k in u_lower for k in ["1vid.", "morencius.", "liiivideo.", "cdnplus.", "mp4plus.", "vidoba.", "anafast.", "vidspeed.", "vidspeeds.", "egybestvid."]):
+    if any(k in u_lower for k in ["1vid.", "morencius.", "liiivideo.", "cdnplus.", "mp4plus.", "vidoba.", "anafast.", "vidspeed.", "vidspeeds.", "egybestvid.", "vidtube."]):
         res = resolve_packed_hls_embed_with_referer(url)
         if res:
             return res
 
-    if any(k in u_lower for k in ["hgcloud", "hglink", "streamhg", "vibuxer", "hanerix", "dhcplay", "streamwish", "vidhide", "byseraguci", "filelions"]):
+    if any(k in u_lower for k in ["hgcloud", "hglink", "streamhg", "vibuxer", "hanerix", "dhcplay", "streamwish", "streamhide", "vidhide", "byseraguci", "filelions", "earnvids", "smoothpre", "minochinos", "cybervynx"]):
         res = resolve_hgcloud_with_referer(url)
         if res:
             return res
 
-    if any(k in u_lower for k in ["doodstream", "playmogo", "dood.", "d000d", "myvidplay", "dsvplay", "vide0"]):
+    if any(k in u_lower for k in ["doodstream", "playmogo", "dood.", "d000d", "d0o0d", "myvidplay", "dsvplay", "vide0"]):
         res = resolve_doodstream_with_referer(url)
         if res:
             return res

@@ -21,4 +21,7 @@ celery_app.conf.update(
     worker_max_tasks_per_child=20, # Recycle child processes to release leaked memory/threads
     worker_send_task_events=False, # No event stream overhead (no Flower/monitor in use)
     broker_connection_retry_on_startup=True,
+    # acks_late + Redis: un-acked tasks are redelivered after visibility_timeout (default 1h).
+    # Long downloads + oversize re-encodes exceed 1h, so raise it to avoid duplicate re-processing.
+    broker_transport_options={"visibility_timeout": 6 * 3600},
 )

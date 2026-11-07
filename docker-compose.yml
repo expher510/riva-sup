@@ -23,6 +23,8 @@ services:
       retries: 5
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7-alpine
@@ -38,6 +40,8 @@ services:
       retries: 5
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
   api:
     build:
@@ -52,6 +56,8 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
       - TMDB_API_KEY=${TMDB_API_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DELIVERY_BOT_TOKEN=${DELIVERY_BOT_TOKEN:-}
+      - DELIVERY_BOT_USERNAME=${DELIVERY_BOT_USERNAME:-}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
@@ -65,6 +71,8 @@ services:
       - "8090:8000"
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
   worker:
     build:
@@ -89,9 +97,11 @@ services:
       - MAX_CONCURRENT_SERIES_CHAINS=${MAX_CONCURRENT_SERIES_CHAINS:-3}
       - HLS_PARALLEL_WORKERS=${HLS_PARALLEL_WORKERS:-8}
       - TELEGRAM_UPLOAD_WORKERS=${TELEGRAM_UPLOAD_WORKERS:-3}
-      - FFMPEG_ENCODE_THREADS=${FFMPEG_ENCODE_THREADS:-2}
+      - FFMPEG_ENCODE_THREADS=${FFMPEG_ENCODE_THREADS:-4}
       - PYTHONDONTWRITEBYTECODE=1
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DELIVERY_BOT_TOKEN=${DELIVERY_BOT_TOKEN:-}
+      - DELIVERY_BOT_USERNAME=${DELIVERY_BOT_USERNAME:-}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
@@ -106,6 +116,8 @@ services:
         condition: service_healthy
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
   orchestrator:
     build:
@@ -130,6 +142,8 @@ services:
       - MAX_CONCURRENT_SERIES_CHAINS=${MAX_CONCURRENT_SERIES_CHAINS:-3}
       - ORCH_TICK_SECONDS=${ORCH_TICK_SECONDS:-40}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DELIVERY_BOT_TOKEN=${DELIVERY_BOT_TOKEN:-}
+      - DELIVERY_BOT_USERNAME=${DELIVERY_BOT_USERNAME:-}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
@@ -144,6 +158,8 @@ services:
         condition: service_healthy
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
   bot:
     build:
@@ -160,6 +176,8 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DELIVERY_BOT_TOKEN=${DELIVERY_BOT_TOKEN:-}
+      - DELIVERY_BOT_USERNAME=${DELIVERY_BOT_USERNAME:-}
       - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
@@ -169,6 +187,8 @@ services:
         condition: service_healthy
     networks:
       - riva_internal_net
+    ports:
+      - "127.0.0.1:5432:5432"
 
 
 volumes:

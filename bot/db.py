@@ -317,6 +317,13 @@ def get_vault_media_counts() -> dict:
     m_total = int(row.get("total_movies_count") or 0)
     s_total = int(row.get("total_series_count") or 0)
     ad_total = int(row.get("adult_movies_count") or 0) + int(row.get("adult_series_count") or 0)
+    # Also count manually-uploaded +18 movies (adult18_movies table)
+    try:
+        with db_cursor() as cur2:
+            cur2.execute("SELECT COUNT(*) AS cnt FROM adult18_movies")
+            ad_total += int((cur2.fetchone() or {}).get("cnt") or 0)
+    except Exception:
+        pass  # table may not exist yet on first boot before init_adult18_tables()
     e_cnt = int(row.get("episodes_count") or 0)
     res = {
         "m": m_clean,
@@ -621,7 +628,7 @@ def get_marvel_catalog() -> dict:
     not_ad_s = f"NOT ({_is_adult_sql('s')})"
     with db_cursor() as cur:
         cur.execute(f"""
-            SELECT m.id, m.title, m.original_title, m.year, m.popularity
+            SELECT m.id, m.title, m.original_title, m.year, m.release_date, m.popularity
             FROM movies m
             WHERE EXISTS (
                 SELECT 1 FROM telegram_archives ta
@@ -648,22 +655,38 @@ def get_marvel_catalog() -> dict:
     def _yr(r):
         return int(r.get("year") or 9999)
 
+    def _release_key(r):
+        """Exact release order: full release_date when known, else Jan 1st of the year (unknown last)."""
+        rd = r.get("release_date")
+        if rd:
+            try:
+                return (rd.year, rd.month, rd.day, r["id"])
+            except AttributeError:
+                pass
+        return (_yr(r), 1, 1, r["id"])
+
     by_key: dict[str, list] = {}
     chrono = []
     for r in movie_rows:
         key = marvel.classify_movie(r)
         if not key:
             continue
-        item = {"id": r["id"], "title": r["title"], "year": r.get("year"), "franchise": key}
+        item = {
+            "id": r["id"],
+            "title": r["title"],
+            "year": r.get("year") or (r["release_date"].year if r.get("release_date") else None),
+            "release_date": r.get("release_date"),
+            "franchise": key,
+        }
         by_key.setdefault(key, []).append(item)
         chrono.append(item)
 
     franchises = []
     for key, label, _, _ in marvel.MARVEL_FRANCHISES:
-        movies = sorted(by_key.get(key, []), key=lambda x: (_yr(x), x["id"]))
+        movies = sorted(by_key.get(key, []), key=_release_key)
         if movies:
             franchises.append({"key": key, "label": label, "movies": movies})
-    chrono.sort(key=lambda x: (_yr(x), x["id"]))
+    chrono.sort(key=_release_key)
 
     series = []
     for r in series_rows:
@@ -892,6 +915,37 @@ def get_episode_archive(episode_id: int):
     return row
 
 
+def get_next_episode(series_id: int, season_number: int, episode_number: int):
+    """Fetches the next chronological archived episode in the series for 1-click binge watching."""
+    cache_key = f"next_ep:{series_id}:{season_number}:{episode_number}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT 
+                e.id, 
+                e.episode_number, 
+                sea.season_number,
+                s.id as series_id,
+                ta.message_id
+            FROM episodes e
+            JOIN seasons sea ON e.season_id = sea.id
+            JOIN series s ON sea.series_id = s.id
+            JOIN telegram_archives ta ON ta.episode_id = e.id AND ta.file_size_bytes > 15000000
+            WHERE s.id = %s 
+              AND (sea.season_number > %s OR (sea.season_number = %s AND e.episode_number > %s))
+            ORDER BY sea.season_number ASC, e.episode_number ASC
+            LIMIT 1;
+        """, (series_id, season_number, season_number, episode_number))
+        row = cur.fetchone()
+
+    if row:
+        _cache_set(cache_key, row)
+    return row
+
+
 def _build_genre_where_clause(genre: str):
     """Returns (sql_condition, params_tuple) for flexible category matching (excludes +18 unless genre=='adult')."""
     if genre in ("adult", "ad"):
@@ -1071,6 +1125,37 @@ def get_movie_details(movie_id: int):
             ORDER BY ta.created_at DESC
             LIMIT 1;
         """, (movie_id,))
+        row = cur.fetchone()
+
+    if row:
+        _cache_set(cache_key, row)
+    return row
+
+
+def get_next_episode(series_id: int, season_number: int, episode_number: int):
+    """Fetches the next chronological archived episode in the series for 1-click binge watching."""
+    cache_key = f"next_ep:{series_id}:{season_number}:{episode_number}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT 
+                e.id, 
+                e.episode_number, 
+                sea.season_number,
+                s.id as series_id,
+                ta.message_id
+            FROM episodes e
+            JOIN seasons sea ON e.season_id = sea.id
+            JOIN series s ON sea.series_id = s.id
+            JOIN telegram_archives ta ON ta.episode_id = e.id AND ta.file_size_bytes > 15000000
+            WHERE s.id = %s 
+              AND (sea.season_number > %s OR (sea.season_number = %s AND e.episode_number > %s))
+            ORDER BY sea.season_number ASC, e.episode_number ASC
+            LIMIT 1;
+        """, (series_id, season_number, season_number, episode_number))
         row = cur.fetchone()
 
     if row:
@@ -1842,16 +1927,20 @@ def register_bot_user(
             existing = cur.fetchone()
 
             if not existing:
-                is_new = True
                 act = (action_text or "🚀 انضم وفتح البوت")[:250]
+                # ON CONFLICT: two concurrent updates from a brand-new user must not raise a PK violation
                 cur.execute("""
                     INSERT INTO bot_users (
                         user_id, username, first_name, last_name, language_code,
                         is_active, status, joined_at, last_active_at, actions_count, last_action,
                         movies_watched_count, episodes_watched_count, searches_count, browses_count
                     )
-                    VALUES (%s, %s, %s, %s, %s, TRUE, 'active', NOW(), NOW(), 1, %s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, TRUE, 'active', NOW(), NOW(), 1, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id) DO NOTHING
+                    RETURNING user_id;
                 """, (user_id, username, first_name, last_name, language_code, act, inc_movie, inc_ep, inc_search, inc_browse))
+                is_new = cur.fetchone() is not None
+            if not existing and is_new:
                 cur.execute("""
                     INSERT INTO bot_user_events (user_id, username, first_name, event_type, details, created_at)
                     VALUES (%s, %s, %s, 'joined', %s, NOW());
@@ -1861,6 +1950,8 @@ def register_bot_user(
                         INSERT INTO bot_user_events (user_id, username, first_name, event_type, details, created_at)
                         VALUES (%s, %s, %s, %s, %s, NOW());
                     """, (user_id, username, first_name, event_type, (action_text or "")[:490]))
+            elif not existing:
+                pass  # lost the insert race to a concurrent update; that call already logged the join
             elif not existing["is_active"]:
                 rejoined = True
                 act = (action_text or "🔄 عاد لتشغيل البوت")[:250]
@@ -2725,6 +2816,7 @@ def delete_uploader_bot(worker_id: int) -> bool:
 def warm_up_cache():
     """Pre-loads all dynamic menus and main categories into RAM on startup for 0ms first-click response."""
     try:
+        init_adult18_tables()
         init_force_sub_table()
         get_required_channels()
         get_vault_media_counts()
@@ -2742,3 +2834,148 @@ def warm_up_cache():
         logger.info("Bot RAM cache pre-warmed successfully.")
     except Exception as e:
         logger.warning(f"Cache warm-up warning: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  🔞 Adult +18 — Telegram Stars Access & Manual Upload
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def init_adult18_tables():
+    """
+    Creates the two +18 tables if they don't exist yet.
+    Safe to call on every startup (idempotent).
+      - adult18_access  : tracks which users paid Stars and when their 30-day access expires
+      - adult18_movies  : manually-uploaded +18 films (admin-only)
+    """
+    with db_cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS adult18_access (
+                id                          SERIAL PRIMARY KEY,
+                user_id                     BIGINT NOT NULL UNIQUE,
+                stars_paid                  INTEGER NOT NULL DEFAULT 100,
+                granted_at                  TIMESTAMPTZ DEFAULT NOW(),
+                expires_at                  TIMESTAMPTZ NOT NULL,
+                telegram_payment_charge_id  TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_adult18_access_user ON adult18_access(user_id);
+
+            CREATE TABLE IF NOT EXISTS adult18_movies (
+                id                SERIAL PRIMARY KEY,
+                title             TEXT NOT NULL,
+                year              INTEGER,
+                description       TEXT,
+                poster_file_id    TEXT,
+                vault_message_id  BIGINT NOT NULL,
+                vault_channel_id  TEXT NOT NULL DEFAULT '-1004466886745',
+                added_by_admin_id BIGINT,
+                created_at        TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+    logger.info("adult18_access and adult18_movies tables ensured.")
+
+
+def check_adult18_access(user_id: int) -> bool:
+    """Returns True if user_id has paid Stars access that has not yet expired."""
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM adult18_access WHERE user_id = %s AND expires_at > NOW()",
+            (user_id,)
+        )
+        return cur.fetchone() is not None
+
+
+def grant_adult18_access(user_id: int, stars_paid: int, charge_id: str) -> None:
+    """
+    Records (or refreshes) a user's paid +18 access for 30 days.
+    If the user already has access, the expiry is extended from the later of
+    NOW() or their current expiry, so back-to-back payments stack.
+    """
+    with db_cursor() as cur:
+        cur.execute("""
+            INSERT INTO adult18_access (user_id, stars_paid, granted_at, expires_at, telegram_payment_charge_id)
+            VALUES (%s, %s, NOW(),
+                    GREATEST(NOW(), (SELECT expires_at FROM adult18_access WHERE user_id = %s)) + INTERVAL '30 days',
+                    %s)
+            ON CONFLICT (user_id) DO UPDATE
+                SET stars_paid                  = EXCLUDED.stars_paid,
+                    granted_at                  = NOW(),
+                    expires_at                  = GREATEST(adult18_access.expires_at, NOW()) + INTERVAL '30 days',
+                    telegram_payment_charge_id  = EXCLUDED.telegram_payment_charge_id;
+        """, (user_id, stars_paid, user_id, charge_id))
+
+
+def get_adult18_movies(page: int = 1, per_page: int = 16) -> dict:
+    """Returns paginated list of manually-uploaded +18 movies."""
+    cache_key = f"adult18_movies:{page}:{per_page}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    offset = (page - 1) * per_page
+    with db_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS cnt FROM adult18_movies")
+        total = int((cur.fetchone() or {}).get("cnt") or 0)
+
+        cur.execute("""
+            SELECT id, title, year, description, poster_file_id,
+                   vault_message_id, vault_channel_id, created_at
+            FROM adult18_movies
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """, (per_page, offset))
+        items = cur.fetchall()
+
+    res = {
+        "items": items,
+        "total": total,
+        "total_pages": max(1, (total + per_page - 1) // per_page),
+    }
+    _cache_set(cache_key, res, ttl=60.0)
+    return res
+
+
+def add_adult18_movie(
+    title: str,
+    vault_message_id: int,
+    vault_channel_id: str,
+    year: int | None = None,
+    description: str | None = None,
+    poster_file_id: str | None = None,
+    added_by_admin_id: int | None = None,
+) -> int:
+    """Inserts a new +18 movie record and returns its DB id."""
+    with db_cursor() as cur:
+        cur.execute("""
+            INSERT INTO adult18_movies
+                (title, year, description, poster_file_id, vault_message_id, vault_channel_id, added_by_admin_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (title, year, description, poster_file_id, vault_message_id, vault_channel_id, added_by_admin_id))
+        row = cur.fetchone()
+    # Invalidate cached pages
+    with _cache_lock:
+        for k in [k for k in _cache if k.startswith("adult18_movies:")]:
+            _cache.pop(k, None)
+    return int(row["id"])
+
+
+def delete_adult18_movie(movie_id: int) -> bool:
+    """Deletes a +18 movie by id. Returns True if a row was deleted."""
+    with db_cursor() as cur:
+        cur.execute("DELETE FROM adult18_movies WHERE id = %s", (movie_id,))
+        deleted = cur.rowcount > 0
+    with _cache_lock:
+        for k in [k for k in _cache if k.startswith("adult18_movies:")]:
+            _cache.pop(k, None)
+    return deleted
+
+
+def get_adult18_access_info(user_id: int) -> dict | None:
+    """Returns the full access row for a user, or None if no active access."""
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT user_id, stars_paid, granted_at, expires_at FROM adult18_access "
+            "WHERE user_id = %s AND expires_at > NOW()",
+            (user_id,)
+        )
+        return cur.fetchone()

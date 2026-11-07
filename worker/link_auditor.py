@@ -115,20 +115,22 @@ def clean_bad_database_records() -> Dict[str, int]:
         """))
         stats["fake_archives_purged"] = res_fake.rowcount
 
-        # 2. Deduplicate episode archives (keep latest)
+        # 2. Deduplicate episode archives (keep latest per channel)
         res_dup_ep = session.execute(text("""
             DELETE FROM telegram_archives ta1 USING telegram_archives ta2
             WHERE ta1.episode_id IS NOT NULL 
               AND ta1.episode_id = ta2.episode_id 
+              AND ta1.channel_id = ta2.channel_id
               AND ta1.id < ta2.id;
         """))
         stats["duplicate_episodes_purged"] = res_dup_ep.rowcount
 
-        # 3. Deduplicate movie archives (keep latest)
+        # 3. Deduplicate movie archives (keep latest per channel)
         res_dup_m = session.execute(text("""
             DELETE FROM telegram_archives ta1 USING telegram_archives ta2
             WHERE ta1.movie_id IS NOT NULL 
               AND ta1.movie_id = ta2.movie_id 
+              AND ta1.channel_id = ta2.channel_id
               AND ta1.id < ta2.id;
         """))
         stats["duplicate_movies_purged"] = res_dup_m.rowcount

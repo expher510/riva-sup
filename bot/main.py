@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import aiohttp
 from bot.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, ADMIN_IDS, BOT_ADMIN_PASSWORD
 from bot import db
+from bot import delivery_bot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +48,16 @@ _unlocked_admins: set[int] = set()
 _awaiting_broadcast: set[int] = set()
 # Admins currently waiting to paste 1 or multiple @BotFather uploader worker tokens
 _awaiting_worker_tokens: set[int] = set()
+
+# ── +18 Admin Manual Upload States ──────────────────────────────────────────
+# Admins who sent a video and we're waiting for their title input
+# Value: dict with the pending video info (file_id, message_id, etc.)
+_awaiting_adult18_title: dict[int, dict] = {}
+# Admins who sent title and we're waiting for year (optional — they can skip)
+_awaiting_adult18_year: dict[int, dict] = {}
+
+ADULT18_STARS_PRICE = 100   # Stars required for 30-day access
+ADULT18_ACCESS_DAYS = 30    # Days of access per payment
 
 _BOT_TOKEN_REGEX = re.compile(r"\b\d{8,13}:[A-Za-z0-9_-]{25,70}\b")
 
@@ -137,6 +148,9 @@ def main_menu_keyboard(counts: dict | None = None) -> dict:
             btn("قسم المسلسلات 📺", "nt:s", style="success"),
         ]
         rows.append(top_row)
+        rows.append([
+            btn(f"🔞 للكبار فقط (+18) • {ADULT18_STARS_PRICE}⭐", "adult_gate"),
+        ])
     else:
         if counts.get("m", 0) > 0:
             top_row.append(btn("قسم الأفلام 🎬", "nt:m", style="success"))
@@ -148,10 +162,10 @@ def main_menu_keyboard(counts: dict | None = None) -> dict:
                 btn("قسم المسلسلات 📺", "nt:s", style="success"),
             ]
         rows.append(top_row)
-        if counts.get("adult", 0) > 0:
-            rows.append([
-                btn("للكبار فقط 🔞 (+18)", "adult_gate"),
-            ])
+        # +18 Stars button — always show regardless of `adult` count
+        rows.append([
+            btn(f"🔞 للكبار فقط (+18) • {ADULT18_STARS_PRICE}⭐", "adult_gate"),
+        ])
 
     rows.append([
         btn("🎁 نقاطي ومشاركة الربح (Affiliate)", "my_affiliate", style="primary"),
@@ -250,12 +264,28 @@ def build_episode_buttons_markup(
     poster_msg_id: int,
     series_title: str = "المسلسل",
     user_id: int | None = None,
+    delivery_bot_user: str | None = None,
 ) -> dict:
     """
     Builds the 3-column episode selector grid + navigation + personal affiliate share + back/exit buttons
-    to be placed directly UNDERNEATH the video player.
+    to be placed directly UNDERNEATH the video player or watch card.
     """
     rows = []
+
+    # If secondary delivery bot is active, place a prominent direct watch button at the top
+    if delivery_bot_user:
+        active_ep_num = 1
+        for ep in episodes:
+            if ep["id"] == active_ep_id:
+                active_ep_num = ep.get("episode_number", 1)
+                break
+        deliv_url = f"https://t.me/{delivery_bot_user}?start=ep_{active_ep_id}"
+        if user_id:
+            deliv_url += f"_r_{user_id}"
+        rows.append([
+            btn(f"🍿 تشغيل الحلقة {active_ep_num} في سيرفر المشاهدة 🎬", url=deliv_url, style="success")
+        ])
+
     row = []
     for ep in episodes:
         ep_id = ep["id"]
@@ -1649,6 +1679,13 @@ async def render_region_menu(chat_id: int, message_id: int | None, media_type: s
         return
 
     rows: list[list[dict]] = []
+    # 🦸 Marvel always first: movies → all Marvel films in release order, series → Marvel series in order
+    mcat = await asyncio.to_thread(db.get_marvel_catalog)
+    if media_type == "m" and mcat["movies_chrono"]:
+        rows.append([btn(f"🦸‍♂️ مارفل ({len(mcat['movies_chrono'])} فيلم بالترتيب)", "mv:o:1", style="danger")])
+    elif media_type == "s" and mcat["series"]:
+        rows.append([btn(f"🦸‍♂️ مارفل ({len(mcat['series'])} مسلسل بالترتيب)", "mv:s:1", style="danger")])
+
     pair: list[dict] = []
     for r in regions:
         pair.append(btn(r["label"], f"nr:{media_type}:{r['code']}", style="success"))
@@ -1870,6 +1907,177 @@ async def render_adult_gate(chat_id: int, message_id: int | None):
         await bot_api.send_message(chat_id, text, reply_markup=markup)
 
 
+_adult18_stars_invoice_link: str | None = None
+
+
+async def get_or_create_adult18_invoice_link() -> str:
+    """
+    Creates (and caches) a universal Telegram Stars invoice link (https://t.me/$...).
+    Works on 100% of Telegram clients: Desktop, Web, Android, iOS.
+    """
+    global _adult18_stars_invoice_link
+    if _adult18_stars_invoice_link:
+        return _adult18_stars_invoice_link
+    payload = {
+        "title": "🔞 اشتراك قسم +18 (30 يوم)",
+        "description": f"وصول كامل لقسم الأفلام الجريئة (+18) لمدة {ADULT18_ACCESS_DAYS} يوماً.",
+        "payload": "adult18_access_30d",
+        "currency": "XTR",
+        "prices": [{"label": f"وصول {ADULT18_ACCESS_DAYS} يوم", "amount": ADULT18_STARS_PRICE}],
+        "provider_token": "",
+    }
+    res = await bot_api.api_call("createInvoiceLink", payload)
+    if res.get("ok") and res.get("result"):
+        _adult18_stars_invoice_link = res.get("result")
+        return _adult18_stars_invoice_link
+    return "https://t.me"
+
+
+async def send_adult18_stars_invoice(chat_id: int) -> bool:
+    """
+    Sends a universal Telegram Stars invoice message.
+    Works on Mobile, Telegram Desktop, and Telegram Web.
+    """
+    inv_link = await get_or_create_adult18_invoice_link()
+    markup = {
+        "inline_keyboard": [
+            [btn(f"⭐ دفع {ADULT18_STARS_PRICE} نجمة (30 يوم) 🔞", url=inv_link, style="danger")],
+            [btn("🔙 رجوع للقائمة الرئيسية", "menu", style="success")],
+        ]
+    }
+    text = (
+        "🔞 <b>فاتورة اشتراك قسم +18 (30 يوماً)</b>\n\n"
+        f"💫 <b>القيمة:</b> {ADULT18_STARS_PRICE} نجمة تيليجرام\n"
+        f"📅 <b>المدة:</b> {ADULT18_ACCESS_DAYS} يوماً كاملاً\n\n"
+        "اضغط على زر الدفع أدناه للمتابعة 👇"
+    )
+    res = await bot_api.send_message(chat_id, text, reply_markup=markup)
+    return bool(res.get("ok"))
+
+
+async def render_adult18_stars_gate(chat_id: int, message_id: int | None, user_id: int):
+    """
+    New Stars-gated +18 entry point:
+    - If user already has active Stars access → go straight to the content list
+    - If not → show the payment gate with a universal Stars invoice button (Mobile + Desktop + Web)
+    """
+    has_access = await asyncio.to_thread(db.check_adult18_access, user_id)
+
+    if has_access:
+        # Already paid — show the +18 movies list directly
+        await render_adult18_movies_section(chat_id, message_id, page=1)
+        return
+
+    inv_link = await get_or_create_adult18_invoice_link()
+    text = (
+        "🔞 <b>قسم للكبار فقط (+18) — محتوى حصري</b>\n\n"
+        "⚠️ هذا القسم يحتوي على <b>أفلام جريئة وحصرية للبالغين (+18)</b> "
+        "مرفوعة يدوياً وغير متاحة في القسم العادي.\n\n"
+        f"💫 <b>للوصول الكامل:</b> {ADULT18_STARS_PRICE} نجمة تيليجرام ({ADULT18_ACCESS_DAYS} يوماً)\n\n"
+        "اضغط الزر أدناه لإتمام الدفع مباشرة من أي جهاز 👇"
+    )
+    markup = {
+        "inline_keyboard": [
+            [btn(f"⭐ ادفع {ADULT18_STARS_PRICE} نجمة — دخول {ADULT18_ACCESS_DAYS} يوم 🔞", url=inv_link, style="danger")],
+            [btn("🔙 رجوع للقائمة الرئيسية", "menu", style="success")],
+        ]
+    }
+    if message_id:
+        await bot_api.edit_or_send(chat_id, message_id, text, reply_markup=markup)
+    else:
+        await bot_api.send_message(chat_id, text, reply_markup=markup)
+
+
+async def render_adult18_movies_section(chat_id: int, message_id: int | None, page: int = 1):
+    """
+    Renders the manually-uploaded +18 movies list (from adult18_movies table).
+    Only accessible after paying Stars.
+    """
+    res = await asyncio.to_thread(db.get_adult18_movies, page, 16)
+    items = res["items"]
+    total_pages = res["total_pages"]
+    header_text = "🔞 قسم الأفلام الحصرية (+18) • محتوى للبالغين فقط"
+
+    if not items:
+        markup = {"inline_keyboard": [[btn("🏠 القائمة الرئيسية", "menu")]]}
+        text = f"{header_text}\n\nلا توجد أفلام في هذا القسم حالياً، ترقب الإضافات قريباً! 🎬"
+        if message_id:
+            await bot_api.edit_or_send(chat_id, message_id, text, reply_markup=markup, parse_mode=None)
+        else:
+            await bot_api.send_message(chat_id, text, reply_markup=markup, parse_mode=None)
+        return
+
+    btn_pairs = []
+    for it in items:
+        clean_t = db.clean_display_title(it["title"])
+        yr = f" ({it['year']})" if it.get("year") else ""
+        btn_pairs.append((f"🔞 {clean_t}{yr}", f"a18_play:{it['id']}:{page}"))
+
+    rows = build_smart_title_rows(btn_pairs)
+    if total_pages > 1:
+        nav = []
+        if page > 1:
+            nav.append(btn("⬅️ السابق", f"a18_list:{page-1}"))
+        nav.append(btn(f"{page}/{total_pages}", "noop"))
+        if page < total_pages:
+            nav.append(btn("التالي ➡️", f"a18_list:{page+1}"))
+        rows.append(nav)
+
+    rows.append([btn("🏠 القائمة الرئيسية", "menu", style="success")])
+    markup = {"inline_keyboard": rows}
+    if message_id:
+        await bot_api.edit_or_send(chat_id, message_id, header_text, reply_markup=markup, parse_mode=None)
+    else:
+        await bot_api.send_message(chat_id, header_text, reply_markup=markup, parse_mode=None)
+
+
+async def render_adult18_movie_play(chat_id: int, movie_id: int, list_page: int, user_id: int):
+    """
+    Delivers a +18 movie video directly to the user (copyMessage from Master Vault).
+    Only callable after Stars access is verified.
+    """
+    res = await asyncio.to_thread(db.get_adult18_movies, 1, 9999)  # fetch all to find by id
+    movie = next((m for m in res["items"] if m["id"] == movie_id), None)
+    if not movie:
+        await bot_api.send_message(chat_id, "⚠️ لم يتم العثور على هذا الفيلم.")
+        return
+
+    title = db.clean_display_title(movie["title"])
+    yr = f" ({movie['year']})" if movie.get("year") else ""
+    desc = (movie.get("description") or "مشاهدة ممتعة 🎬").strip()
+
+    # Send poster if available
+    if movie.get("poster_file_id"):
+        caption = f"🔞 <b>{html.escape(title)}{yr}</b>\n\n{html.escape(desc)}"
+        await bot_api.api_call("sendPhoto", {
+            "chat_id": chat_id,
+            "photo": movie["poster_file_id"],
+            "caption": caption,
+            "parse_mode": "HTML",
+        })
+
+    # Deliver the video
+    back_markup = {
+        "inline_keyboard": [
+            [btn("🔙 رجوع لقائمة +18", f"a18_list:{list_page}"), btn("🏠 القائمة الرئيسية", "menu")]
+        ]
+    }
+    copy_res = await bot_api.api_call("copyMessage", {
+        "chat_id": chat_id,
+        "from_chat_id": int(movie["vault_channel_id"]),
+        "message_id": int(movie["vault_message_id"]),
+        "caption": f"🔞 <b>{html.escape(title)}{yr}</b>",
+        "parse_mode": "HTML",
+        "reply_markup": back_markup,
+    })
+    if not copy_res.get("ok"):
+        await bot_api.send_message(
+            chat_id,
+            f"⚠️ تعذر تشغيل الفيلم حالياً. يُرجى المحاولة لاحقاً.\n\n{copy_res.get('description', '')}",
+            reply_markup=back_markup
+        )
+
+
 async def render_adult_section(chat_id: int, message_id: int | None, page: int = 1):
     """
     Renders the isolated 'للكبار فقط 🔞' (+18) section list.
@@ -1913,6 +2121,7 @@ async def render_adult_section(chat_id: int, message_id: int | None, page: int =
         await bot_api.edit_or_send(chat_id, message_id, header_text, reply_markup=markup, parse_mode=None)
     else:
         await bot_api.send_message(chat_id, header_text, reply_markup=markup, parse_mode=None)
+
 
 
 # ───────────────────────── 🦸 عالم مارفل (Marvel Universe) ─────────────────────────
@@ -1981,7 +2190,7 @@ async def render_marvel_franchises(chat_id: int, message_id: int | None):
             pair = []
     if pair:
         rows.append(pair)
-    rows.append([btn("🔙 رجوع لعالم مارفل", "mv:h"), btn("🏠 الرئيسية", "menu")])
+    rows.append([btn("🔙 رجوع لأفلام مارفل", "mv:o:1"), btn("🏠 الرئيسية", "menu")])
     text = "<b>🎬 سلاسل أفلام مارفل</b>\n\nكل سلسلة مرتبة من الجزء الأول للأخير ⬇️"
     if not cat["franchises"]:
         text = "<b>🎬 سلاسل أفلام مارفل</b>\n\nلا توجد أفلام مارفل متوفرة حالياً."
@@ -1998,7 +2207,7 @@ async def render_marvel_franchise(chat_id: int, message_id: int | None, key: str
         [btn(_marvel_item_label(i, m["title"], m.get("year")), f"m_play:{m['id']}:mv-{key}:1")]
         for i, m in enumerate(fr["movies"], 1)
     ]
-    rows.append([btn("🔙 رجوع للسلاسل", "mv:f"), btn("🦸‍♂️ عالم مارفل", "mv:h")])
+    rows.append([btn("🔙 رجوع للسلاسل", "mv:f"), btn("🦸‍♂️ كل أفلام مارفل", "mv:o:1")])
     text = f"<b>{html.escape(fr['label'])}</b>\n\nالأجزاء مرتبة حسب تاريخ العرض ⬇️"
     await _send_or_edit(chat_id, message_id, text, rows)
 
@@ -2009,14 +2218,22 @@ async def render_marvel_chrono(chat_id: int, message_id: int | None, page: int):
     total_pages = max(1, (len(movies) + MARVEL_PAGE_SIZE - 1) // MARVEL_PAGE_SIZE)
     page = min(max(1, page), total_pages)
     start = (page - 1) * MARVEL_PAGE_SIZE
-    rows = [
+    rows: list[list[dict]] = []
+    if cat["franchises"]:
+        rows.append([btn(f"🎬 تصفح حسب السلسلة ({len(cat['franchises'])})", "mv:f", style="success")])
+    rows += [
         [btn(_marvel_item_label(start + i, m["title"], m.get("year")), f"m_play:{m['id']}:mv-o:{page}")]
         for i, m in enumerate(movies[start:start + MARVEL_PAGE_SIZE], 1)
     ]
     if total_pages > 1:
         rows.append(_paged_nav(page, total_pages, "mv:o"))
-    rows.append([btn("🔙 رجوع لعالم مارفل", "mv:h"), btn("🏠 الرئيسية", "menu")])
-    text = "<b>📅 كل أفلام مارفل بترتيب العرض</b>\n\nمن الأقدم للأحدث ⬇️"
+    rows.append([btn("🔙 رجوع لقسم الأفلام", "nt:m"), btn("🏠 الرئيسية", "menu")])
+    text = (
+        f"<b>🦸‍♂️ مارفل — كل الأفلام بالترتيب ({len(movies)})</b>\n\n"
+        "مرتبة حسب تاريخ العرض من الأقدم للأحدث ⬇️"
+    )
+    if not movies:
+        text = "<b>🦸‍♂️ مارفل</b>\n\nجاري رفع أفلام مارفل قريباً..."
     await _send_or_edit(chat_id, message_id, text, rows)
 
 
@@ -2032,8 +2249,11 @@ async def render_marvel_series(chat_id: int, message_id: int | None, page: int):
     ]
     if total_pages > 1:
         rows.append(_paged_nav(page, total_pages, "mv:s"))
-    rows.append([btn("🔙 رجوع لعالم مارفل", "mv:h"), btn("🏠 الرئيسية", "menu")])
-    text = "<b>📺 مسلسلات مارفل مرتبة</b>\n\nحسب ترتيب العرض ⬇️"
+    rows.append([btn("🔙 رجوع لقسم المسلسلات", "nt:s"), btn("🏠 الرئيسية", "menu")])
+    text = (
+        f"<b>🦸‍♂️ مارفل — كل المسلسلات بالترتيب ({len(series)})</b>\n\n"
+        "مرتبة حسب ترتيب العرض من الأقدم للأحدث ⬇️"
+    )
     if not series:
         text = "<b>📺 مسلسلات مارفل</b>\n\nلا توجد مسلسلات مارفل متوفرة حالياً."
     await _send_or_edit(chat_id, message_id, text, rows)
@@ -2131,6 +2351,91 @@ async def handle_message(msg: dict):
                 await bot_api.edit_or_send(chat_id, wait_msg, full_reply, reply_markup=w_markup)
             else:
                 await bot_api.send_message(chat_id, full_reply, reply_markup=w_markup, reply_to_message_id=message_id)
+            return
+
+    # ── 🔞 Admin +18 Upload Flow ─────────────────────────────────────────────
+    is_adm = (user_id in _unlocked_admins) or (user_id in ADMIN_IDS)
+
+    # Step 3: Admin sent the year (or skipped)
+    if user_id in _awaiting_adult18_year:
+        pending = _awaiting_adult18_year.pop(user_id)
+        year_input = text.strip()
+        year_val = None
+        if year_input.isdigit() and 1900 <= int(year_input) <= 2100:
+            year_val = int(year_input)
+        movie_db_id = await asyncio.to_thread(
+            db.add_adult18_movie,
+            pending["title"],
+            pending["vault_message_id"],
+            pending["vault_channel_id"],
+            year_val,
+            pending.get("description"),
+            pending.get("poster_file_id"),
+            user_id,
+        )
+        yr_disp = f" ({year_val})" if year_val else ""
+        confirm_markup = {
+            "inline_keyboard": [[
+                btn("🗑️ حذف", f"a18_del:{movie_db_id}"),
+                btn("🔞 عرض قائمة +18", "a18_list:1"),
+            ]]
+        }
+        await bot_api.send_message(
+            chat_id,
+            f"✅ <b>تم حفظ الفيلم في قسم +18 بنجاح!</b>\n\n"
+            f"🎬 <b>{html.escape(pending['title'])}{html.escape(yr_disp)}</b>\n"
+            f"🆔 معرّف DB: <code>{movie_db_id}</code>",
+            reply_markup=confirm_markup,
+        )
+        return
+
+    # Step 2: Admin sent the title
+    if user_id in _awaiting_adult18_title:
+        pending = _awaiting_adult18_title.pop(user_id)
+        if not text or text.startswith("/"):
+            await bot_api.send_message(chat_id, "❌ تم إلغاء رفع فيلم +18.")
+            return
+        pending["title"] = text.strip()
+        _awaiting_adult18_year[user_id] = pending
+        await bot_api.send_message(
+            chat_id,
+            f"✅ العنوان: <b>{html.escape(text.strip())}</b>\n\n"
+            "الآن أرسل <b>سنة الإنتاج</b> (مثال: 2024)\n"
+            "أو أرسل أي نص آخر للتخطي.",
+        )
+        return
+
+    # Step 1: Admin sent a video — forward to Master Vault and start +18 flow
+    if is_adm and ("video" in msg or "document" in msg):
+        vid = msg.get("video") or msg.get("document")
+        mime = (vid.get("mime_type") or "").lower() if vid else ""
+        if "video" in mime or msg.get("video"):
+            fwd_res = await bot_api.api_call("copyMessage", {
+                "chat_id": int(TELEGRAM_CHANNEL_ID),
+                "from_chat_id": chat_id,
+                "message_id": message_id,
+            })
+            if not fwd_res.get("ok"):
+                await bot_api.send_message(
+                    chat_id,
+                    f"⚠️ فشل نسخ الفيديو إلى Master Vault: {fwd_res.get('description', '')}\n\n"
+                    "تأكد أن البوت أدمن في قناة الأرشيف.",
+                )
+                return
+            vault_msg_id = fwd_res["result"]["message_id"]
+            _awaiting_adult18_title[user_id] = {
+                "vault_message_id": vault_msg_id,
+                "vault_channel_id": str(TELEGRAM_CHANNEL_ID),
+                "poster_file_id": None,
+                "description": (msg.get("caption") or "").strip() or None,
+            }
+            await bot_api.send_message(
+                chat_id,
+                f"📹 <b>تم استلام الفيديو ونسخه للـ Vault</b>\n"
+                f"🆔 Vault Message ID: <code>{vault_msg_id}</code>\n\n"
+                "الآن أرسل <b>عنوان الفيلم</b> (مثال: Fifty Shades of Grey)\n"
+                "أو أرسل /cancel للإلغاء.",
+            )
             return
 
     # Handle Native Group/Channel Selection (chat_shared event)
@@ -2453,6 +2758,34 @@ async def deliver_deep_link_target(chat_id: int, from_user: dict, deep_arg: str)
             is_ad_m = bool(m.get("is_adult"))
             back_lbl = "🔙 رجوع لقسم للكبار فقط" if is_ad_m else "🔙 رجوع للأفلام"
             back_tok = "ad-all" if is_ad_m else "all"
+
+            deliv_user = delivery_bot.get_active_delivery_bot_username()
+            if deliv_user:
+                deliv_url = f"https://t.me/{deliv_user}?start=m_{movie_id}"
+                if user_id:
+                    deliv_url += f"_r_{user_id}"
+                video_buttons = {
+                    "inline_keyboard": [
+                        [
+                            btn("🍿 اضغط هنا للمشاهدة والتحميل 🎬", url=deliv_url, style="success")
+                        ],
+                        [
+                            btn("📋 نسخ رابط الفيلم (+1 نقطة 🎁)", copy_text=aff_m_link, style="primary"),
+                            btn("📤 مشاركة (+1 نقطة)", url=build_share_url(aff_m_link, clean_m_title)),
+                        ],
+                        [
+                            btn(back_lbl, f"back_cat:{back_tok}:1:{poster_msg_id}"),
+                            btn("خروج", f"exit_vid:{poster_msg_id}")
+                        ]
+                    ]
+                }
+                await bot_api.send_message(
+                    chat_id,
+                    f"🍿 <b>جاهز للمشاهدة الفورية!</b>\n\nاضغط على الزر الأخضر بالأسفل لتشغيل فيلم <b>{clean_m_title}</b> فوراً في سيرفر المشاهدة السريع وبدون إعلانات:",
+                    reply_markup=video_buttons
+                )
+                return True
+
             video_buttons = {
                 "inline_keyboard": [
                     [
@@ -2489,6 +2822,7 @@ async def deliver_deep_link_target(chat_id: int, from_user: dict, deep_arg: str)
             poster_url = get_poster_full_url(s.get("poster_path"))
             caption = build_series_poster_caption(s, first_ep, user_id=user_id)
             poster_msg_id = await bot_api.send_poster_with_caption(chat_id, poster_url, caption)
+            deliv_user = delivery_bot.get_active_delivery_bot_username()
             video_buttons = build_episode_buttons_markup(
                 series_id=series_id,
                 episodes=episodes,
@@ -2500,7 +2834,16 @@ async def deliver_deep_link_target(chat_id: int, from_user: dict, deep_arg: str)
                 poster_msg_id=poster_msg_id,
                 series_title=f"مسلسل {s_title}",
                 user_id=user_id,
+                delivery_bot_user=deliv_user,
             )
+            if deliv_user:
+                await bot_api.send_message(
+                    chat_id,
+                    f"🍿 <b>مسلسل {s_title} — الحلقة {first_ep.get('episode_number', 1)}</b>\n\nاختر الحلقة واضغط على زر التشغيل بالأسفل لمشاهدتها فوراً في سيرفر المشاهدة السريع:",
+                    reply_markup=video_buttons
+                )
+                return True
+
             channel = int(first_ep["channel_id"]) if first_ep.get("channel_id") else TELEGRAM_CHANNEL_ID
             aff_ep_link = build_affiliate_redirect_url("episode", first_ep["id"], user_id)
             v_cap = build_video_share_caption(f"مسلسل {s_title} — ح{first_ep.get('episode_number', 1)}", aff_ep_link)
@@ -2527,6 +2870,7 @@ async def deliver_deep_link_target(chat_id: int, from_user: dict, deep_arg: str)
             poster_url = get_poster_full_url(s.get("poster_path") if s else None)
             caption = build_series_poster_caption(s or {"id": series_id, "title": ep.get("series_title")}, ep, user_id=user_id)
             poster_msg_id = await bot_api.send_poster_with_caption(chat_id, poster_url, caption)
+            deliv_user = delivery_bot.get_active_delivery_bot_username()
             video_buttons = build_episode_buttons_markup(
                 series_id=series_id,
                 episodes=episodes,
@@ -2538,7 +2882,16 @@ async def deliver_deep_link_target(chat_id: int, from_user: dict, deep_arg: str)
                 poster_msg_id=poster_msg_id,
                 series_title=f"مسلسل {s_title}",
                 user_id=user_id,
+                delivery_bot_user=deliv_user,
             )
+            if deliv_user:
+                await bot_api.send_message(
+                    chat_id,
+                    f"🍿 <b>مسلسل {s_title} — الحلقة {ep.get('episode_number', 1)}</b>\n\nاضغط على زر التشغيل بالأسفل لمشاهدتها فوراً في سيرفر المشاهدة السريع:",
+                    reply_markup=video_buttons
+                )
+                return True
+
             channel = int(ep["channel_id"]) if ep.get("channel_id") else TELEGRAM_CHANNEL_ID
             aff_ep_link = build_affiliate_redirect_url("episode", ep_id, user_id)
             v_cap = build_video_share_caption(f"مسلسل {s_title} — ح{ep.get('episode_number', 1)}", aff_ep_link)
@@ -2981,13 +3334,51 @@ async def handle_callback(cb: dict):
         await bot_api.edit_or_send(chat_id, message_id, prompt_text, reply_markup=markup)
         return
 
-    # 4.5 Adult (+18) Warning Gate & Isolated Section ('للكبار فقط 🔞')
+    # 4.5 Adult (+18) Stars-Gated Section
     if data == "adult_gate":
         await bot_api.answer_callback(cb_id)
-        asyncio.create_task(track_bot_user_bg(from_user, action_text="🔞 فتح بوابة قسم للكبار فقط", event_type="browse"))
-        await render_adult_gate(chat_id, message_id)
+        asyncio.create_task(track_bot_user_bg(from_user, action_text="🔞 فتح بوابة قسم للكبار فقط (+18 Stars)", event_type="browse"))
+        await render_adult18_stars_gate(chat_id, message_id, user_id)
         return
 
+    # Stars invoice trigger (user clicked "Pay X Stars")
+    if data == "adult18_pay":
+        await bot_api.answer_callback(cb_id)
+        # Delete the gate message first so the invoice appears cleanly
+        if message_id:
+            await bot_api.delete_message(chat_id, message_id)
+        sent = await send_adult18_stars_invoice(chat_id)
+        if not sent:
+            await bot_api.send_message(chat_id, "⚠️ تعذر إرسال فاتورة الدفع، يُرجى المحاولة لاحقاً.")
+        return
+
+    # Paid users browsing +18 movies list
+    if data.startswith("a18_list:"):
+        await bot_api.answer_callback(cb_id)
+        parts = data.split(":")
+        page = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
+        has_access = await asyncio.to_thread(db.check_adult18_access, user_id)
+        if not has_access:
+            await render_adult18_stars_gate(chat_id, message_id, user_id)
+            return
+        await render_adult18_movies_section(chat_id, message_id, page)
+        return
+
+    # Paid users playing a +18 movie
+    if data.startswith("a18_play:"):
+        await bot_api.answer_callback(cb_id)
+        parts = data.split(":")
+        movie_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        list_page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+        has_access = await asyncio.to_thread(db.check_adult18_access, user_id)
+        if not has_access:
+            await render_adult18_stars_gate(chat_id, message_id, user_id)
+            return
+        asyncio.create_task(track_bot_user_bg(from_user, action_text="🔞 مشاهدة فيلم +18", event_type="watch"))
+        await render_adult18_movie_play(chat_id, movie_id, list_page, user_id)
+        return
+
+    # (Legacy) old-style adult section — keep for backward compatibility
     if data.startswith("adult_list:"):
         await bot_api.answer_callback(cb_id)
         parts = data.split(":")
@@ -2996,6 +3387,23 @@ async def handle_callback(cb: dict):
             asyncio.create_task(track_bot_user_bg(from_user, action_text="📂 تصفح قسم: للكبار فقط 🔞", event_type="browse"))
         await render_adult_section(chat_id, message_id, page)
         return
+
+    # Admin: delete a +18 movie from the list
+    if data.startswith("a18_del:"):
+        is_adm = (user_id in _unlocked_admins) or (user_id in ADMIN_IDS)
+        if not is_adm:
+            await bot_api.answer_callback(cb_id, "⛔ ليس لديك صلاحية.")
+            return
+        await bot_api.answer_callback(cb_id)
+        parts = data.split(":")
+        movie_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        deleted = await asyncio.to_thread(db.delete_adult18_movie, movie_id)
+        await bot_api.send_message(
+            chat_id,
+            f"{'✅ تم حذف الفيلم بنجاح.' if deleted else '⚠️ لم يتم العثور على الفيلم.'}"
+        )
+        return
+
 
     # 5. Category Movies Grid
     if data.startswith("cat:"):
@@ -3044,6 +3452,34 @@ async def handle_callback(cb: dict):
         is_ad_m = bool(m.get("is_adult")) or genre.startswith("ad")
         back_lbl = "🔙 رجوع لقسم للكبار فقط" if is_ad_m else "🔙 رجوع للأفلام"
         back_tok = "ad-all" if is_ad_m else genre
+
+        deliv_user = delivery_bot.get_active_delivery_bot_username()
+        if deliv_user:
+            deliv_url = f"https://t.me/{deliv_user}?start=m_{movie_id}"
+            if user_id:
+                deliv_url += f"_r_{user_id}"
+            video_buttons = {
+                "inline_keyboard": [
+                    [
+                        btn("🍿 اضغط هنا للمشاهدة والتحميل 🎬", url=deliv_url, style="success")
+                    ],
+                    [
+                        btn("📋 نسخ رابط الفيلم (+1 نقطة 🎁)", copy_text=aff_m_link, style="primary"),
+                        btn("📤 مشاركة (+1 نقطة)", url=build_share_url(aff_m_link, clean_m_title)),
+                    ],
+                    [
+                        btn(back_lbl, f"back_cat:{back_tok}:{page}:{poster_msg_id}"),
+                        btn("خروج", f"exit_vid:{poster_msg_id}")
+                    ]
+                ]
+            }
+            await bot_api.send_message(
+                chat_id,
+                f"🍿 <b>جاهز للمشاهدة الفورية!</b>\n\nاضغط على الزر الأخضر بالأسفل لتشغيل فيلم <b>{clean_m_title}</b> فوراً في سيرفر المشاهدة السريع وبدون إعلانات:",
+                reply_markup=video_buttons
+            )
+            return
+
         video_buttons = {
             "inline_keyboard": [
                 [
@@ -3118,6 +3554,7 @@ async def handle_callback(cb: dict):
         )
 
         # 2. Send Episode 1 Video right underneath the Poster, with Episode Buttons underneath the Video
+        deliv_user = delivery_bot.get_active_delivery_bot_username()
         video_buttons = build_episode_buttons_markup(
             series_id=series_id,
             episodes=episodes,
@@ -3129,7 +3566,16 @@ async def handle_callback(cb: dict):
             poster_msg_id=poster_msg_id,
             series_title=f"مسلسل {s_title}",
             user_id=user_id,
+            delivery_bot_user=deliv_user,
         )
+        if deliv_user:
+            await bot_api.send_message(
+                chat_id,
+                f"🍿 <b>مسلسل {s_title} — الحلقة {first_ep.get('episode_number', 1)}</b>\n\nاختر الحلقة واضغط على زر التشغيل بالأسفل لمشاهدتها فوراً في سيرفر المشاهدة السريع:",
+                reply_markup=video_buttons
+            )
+            return
+
         channel = int(first_ep["channel_id"]) if first_ep.get("channel_id") else TELEGRAM_CHANNEL_ID
         aff_ep_link = build_affiliate_redirect_url("episode", first_ep["id"], user_id)
         v_cap = build_video_share_caption(f"مسلسل {s_title} — ح{first_ep.get('episode_number', 1)}", aff_ep_link)
@@ -3153,6 +3599,7 @@ async def handle_callback(cb: dict):
         episodes = res_eps.get("episodes", [])
         total_ep_pages = res_eps.get("total_pages", 1)
 
+        deliv_user = delivery_bot.get_active_delivery_bot_username()
         video_buttons = build_episode_buttons_markup(
             series_id=series_id,
             episodes=episodes,
@@ -3164,6 +3611,7 @@ async def handle_callback(cb: dict):
             poster_msg_id=poster_msg_id,
             series_title=f"مسلسل {s_title}",
             user_id=user_id,
+            delivery_bot_user=deliv_user,
         )
         await bot_api.api_call("editMessageReplyMarkup", {
             "chat_id": chat_id,
@@ -3202,6 +3650,34 @@ async def handle_callback(cb: dict):
         total_ep_pages = res_eps.get("total_pages", 1)
 
         caption = build_series_poster_caption(s or {"id": series_id, "title": ep.get("series_title")}, ep, user_id=user_id)
+
+        deliv_user = delivery_bot.get_active_delivery_bot_username()
+        if deliv_user:
+            if poster_msg_id > 0:
+                await asyncio.gather(
+                    bot_api.edit_poster_caption(chat_id, poster_msg_id, caption),
+                    return_exceptions=True
+                )
+            video_buttons = build_episode_buttons_markup(
+                series_id=series_id,
+                episodes=episodes,
+                active_ep_id=ep_id,
+                s_cat=s_cat,
+                s_page=s_page,
+                ep_page=ep_page,
+                total_ep_pages=total_ep_pages,
+                poster_msg_id=poster_msg_id,
+                series_title=f"مسلسل {s_title}",
+                user_id=user_id,
+                delivery_bot_user=deliv_user,
+            )
+            await bot_api.edit_or_send(
+                chat_id,
+                message_id,
+                f"🍿 <b>مسلسل {s_title} — الحلقة {ep.get('episode_number', 1)}</b>\n\nاضغط على زر التشغيل بالأسفل لمشاهدة الحلقة في سيرفر المشاهدة السريع:",
+                reply_markup=video_buttons
+            )
+            return
 
         if poster_msg_id > 0:
             # Poster is already right above the video: update its caption & delete old video concurrently
@@ -3285,6 +3761,9 @@ async def run_bot():
     else:
         logger.error(f"Failed to verify bot token: {me_res}")
 
+    delivery_bot.set_main_bot_username(BOT_USERNAME)
+    delivery_bot.start_delivery_bot_background()
+
     await bot_api.api_call("deleteWebhook", {"drop_pending_updates": False})
     asyncio.create_task(periodic_cache_refresher())
     asyncio.create_task(initial_silent_health_sync())
@@ -3295,7 +3774,11 @@ async def run_bot():
             res = await bot_api.api_call("getUpdates", {
                 "offset": offset,
                 "timeout": 25,
-                "allowed_updates": ["message", "callback_query", "my_chat_member", "chat_member"]
+                "allowed_updates": [
+                    "message", "callback_query",
+                    "pre_checkout_query",   # ← Telegram Stars payment step 1
+                    "my_chat_member", "chat_member"
+                ]
             })
             if not res.get("ok"):
                 await asyncio.sleep(2)
@@ -3305,14 +3788,57 @@ async def run_bot():
             for upd in updates:
                 offset = upd["update_id"] + 1
                 if "message" in upd:
-                    asyncio.create_task(handle_message(upd["message"]))
+                    msg_upd = upd["message"]
+                    # ── Telegram Stars: successful_payment lands as a message ──
+                    if "successful_payment" in msg_upd:
+                        asyncio.create_task(handle_successful_payment(msg_upd))
+                    else:
+                        asyncio.create_task(handle_message(msg_upd))
                 elif "callback_query" in upd:
                     asyncio.create_task(handle_callback(upd["callback_query"]))
+                elif "pre_checkout_query" in upd:
+                    # Telegram Stars: always approve — real validation happens on successful_payment
+                    pcq = upd["pre_checkout_query"]
+                    asyncio.create_task(bot_api.api_call("answerPreCheckoutQuery", {
+                        "pre_checkout_query_id": pcq["id"],
+                        "ok": True,
+                    }))
                 elif "my_chat_member" in upd:
                     asyncio.create_task(handle_my_chat_member(upd["my_chat_member"]))
         except Exception as e:
             logger.error(f"Polling loop error: {e}")
             await asyncio.sleep(2)
+
+
+async def handle_successful_payment(msg: dict):
+    """
+    Handles Telegram Stars successful_payment for the +18 section.
+    Grants the user 30 days of access and shows them the content list immediately.
+    """
+    chat_id  = msg["chat"]["id"]
+    user_id  = msg.get("from", {}).get("id", chat_id)
+    payment  = msg.get("successful_payment", {})
+    stars    = payment.get("total_amount", ADULT18_STARS_PRICE)
+    charge_id = payment.get("telegram_payment_charge_id", "")
+    payload  = payment.get("invoice_payload", "")
+
+    if payload != "adult18_access_30d":
+        # Not our invoice — ignore
+        return
+
+    # Persist access
+    await asyncio.to_thread(db.grant_adult18_access, user_id, stars, charge_id)
+
+    logger.info(f"Stars payment: user {user_id} paid {stars}⭐ for adult18 access (charge={charge_id})")
+
+    await bot_api.send_message(
+        chat_id,
+        f"🎉 <b>تم الدفع بنجاح! مرحباً بك في قسم +18 🔞</b>\n\n"
+        f"⭐ دفعت <b>{stars} نجمة</b> — وصولك مفعّل لمدة <b>{ADULT18_ACCESS_DAYS} يوماً</b> كاملاً.\n\n"
+        "الآن يمكنك مشاهدة جميع الأفلام الحصرية في القسم 👇",
+    )
+    await render_adult18_movies_section(chat_id, None, page=1)
+
 
 
 if __name__ == "__main__":

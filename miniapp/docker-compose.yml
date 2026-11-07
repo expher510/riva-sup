@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  miniapp_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: riva_miniapp_backend
+    restart: always
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_USER=riva_admin
+      - POSTGRES_PASSWORD=super_secret_db_password_change_in_production
+      - POSTGRES_DB=riva_production
+      - POSTGRES_HOST=riva_postgres
+      - POSTGRES_PORT=5432
+      - TMDB_API_KEY=9acdd2e9bdd2c77d2134171ce08da1db
+      - MAIN_BOT_TOKEN=9110792514:AAENq1z9SHe8uaJcQkLDc23dKaMw0IddpsI
+      - DELIVERY_BOT_TOKEN=9107119612:AAFAzgtzQE-tqWV8bGkAF9Ae_xxHVtXeuPc
+      - DELIVERY_VAULT_CHANNEL_ID=-1004488480136
+      - VIP_STARS_PRICE=100
+      - VIP_DURATION_DAYS=30
+    ports:
+      - "8095:8000"
+    networks:
+      - riva_default
+
+  miniapp_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: riva_miniapp_frontend
+    restart: always
+    ports:
+      - "8096:80"
+    depends_on:
+      - miniapp_backend
+    networks:
+      - riva_default
+
+networks:
+  riva_default:
+    external: true
+

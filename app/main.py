@@ -806,8 +806,8 @@ async def ingest_episode(req: IngestEpisodeRequest, db: AsyncSession = Depends(g
     if candidate_streams:
         try:
             from worker.pipeline import process_episode_transit_pipeline
-            # Queued for ordered dispatch by batch_dispatcher
-            dispatched = False
+            # Queued for ordered dispatch by batch_dispatcher
+            dispatched = False
         except Exception:
             pass
 
@@ -860,8 +860,8 @@ async def ingest_movie(req: IngestMovieRequest, db: AsyncSession = Depends(get_d
     if candidate_streams:
         try:
             from worker.pipeline import process_video_transit_pipeline
-            # Queued for ordered dispatch by batch_dispatcher
-            dispatched = False
+            # Queued for ordered dispatch by batch_dispatcher
+            dispatched = False
         except Exception:
             pass
 

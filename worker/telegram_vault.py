@@ -271,6 +271,9 @@ def optimize_for_faststart_and_thumb(
         try:
             dur_sec = max(int(duration or 0), 60)
             target_v_kbps = max(450, min(2200, int((1700 * 8192) / dur_sec) - 128))
+            # 720p keeps the ~1700 MiB bitrate budget visually clean and encodes ~2x faster than 1080p,
+            # and the timeout scales with runtime so long films never hit a fixed ceiling and loop forever.
+            shrink_timeout = max(2400, int(dur_sec * 1.5))
             logger.warning(
                 f"Video '{faststart_path.name}' ({faststart_path.stat().st_size / 1048576:.1f} MiB) exceeds 1950 MiB limit; "
                 f"transcoding to ~1700 MiB ({target_v_kbps} kbps) for MTProto..."
@@ -281,10 +284,10 @@ def optimize_for_faststart_and_thumb(
                 "-map", "0:v:0",
                 "-map", "0:a:0?",
                 "-dn",
-                "-vf", "scale='min(1080,iw)':-2",
+                "-vf", "scale=-2:'min(720,ih)'",
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
-                "-threads", os.getenv("FFMPEG_ENCODE_THREADS", "2"),
+                "-threads", os.getenv("FFMPEG_ENCODE_THREADS", "4"),
                 "-b:v", f"{target_v_kbps}k",
                 "-maxrate", f"{int(target_v_kbps * 1.15)}k",
                 "-bufsize", f"{int(target_v_kbps * 2)}k",
@@ -295,7 +298,7 @@ def optimize_for_faststart_and_thumb(
                 "-movflags", "+faststart",
                 str(shrunk_path),
             ]
-            res_sh = subprocess.run(shrink_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2400)
+            res_sh = subprocess.run(shrink_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=shrink_timeout)
             if (
                 res_sh.returncode == 0
                 and shrunk_path.exists()
@@ -1206,6 +1209,109 @@ def upload_video_to_vault(
     )
 
 
+def _mirror_archive_to_backup(archive: TelegramArchive, session) -> None:
+    """
+    Silently copies a freshly-saved TelegramArchive to ALL configured delivery/backup vault
+    channels using copyMessage (zero bandwidth — files stay on Telegram servers).
+
+    Channels are read from (in priority order):
+      1. BACKUP_VAULT_CHANNEL_IDS  — comma-separated list (preferred, multi-vault)
+      2. BACKUP_VAULT_CHANNEL_ID   — legacy single-channel value
+
+    Bot token is read from BACKUP_VAULT_BOT_TOKEN — this bot must be admin
+    (Post Messages permission) in EVERY channel listed above.
+
+    Runs synchronously inside record_telegram_archive; errors are non-fatal.
+    """
+    # ── Resolve backup token ───────────────────────────────────────────────────
+    backup_token = (
+        getattr(settings, "BACKUP_VAULT_BOT_TOKEN", "")
+        or os.getenv("BACKUP_VAULT_BOT_TOKEN", "")
+    ).strip()
+    if not backup_token:
+        return  # Backup vault not configured — skip silently
+
+    # ── Resolve backup channel list (multi-channel support) ───────────────────
+    raw_ids = (
+        getattr(settings, "BACKUP_VAULT_CHANNEL_IDS", "")
+        or os.getenv("BACKUP_VAULT_CHANNEL_IDS", "")
+        # Legacy single-value fallback
+        or getattr(settings, "BACKUP_VAULT_CHANNEL_ID", "")
+        or os.getenv("BACKUP_VAULT_CHANNEL_ID", "")
+    ).strip()
+
+    backup_channels: List[str] = [c.strip() for c in raw_ids.split(",") if c.strip()]
+    if not backup_channels:
+        return  # No delivery vaults configured — skip silently
+
+    primary_channel = str(archive.channel_id or "").strip()
+
+    if not archive.message_id:
+        logger.warning("_mirror_archive_to_backup: archive has no message_id, cannot mirror.")
+        return
+
+    # ── Mirror to each delivery vault ─────────────────────────────────────────
+    for backup_channel in backup_channels:
+        if primary_channel == backup_channel:
+            continue  # Already the primary — do not create a self-copy
+
+        # Skip if a row for this channel already exists (idempotency)
+        try:
+            already = session.query(TelegramArchive).filter_by(
+                channel_id=backup_channel,
+                movie_id=archive.movie_id,
+                episode_id=archive.episode_id,
+            ).first()
+            if already:
+                logger.debug(
+                    f"Mirror: channel {backup_channel} already has archive for "
+                    f"ep={archive.episode_id}, movie={archive.movie_id} — skipping."
+                )
+                continue
+        except Exception:
+            pass  # Non-fatal; continue and try to copy anyway
+
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{backup_token}/copyMessage",
+                json={
+                    "chat_id":      int(backup_channel),
+                    "from_chat_id": int(primary_channel),
+                    "message_id":   int(archive.message_id),
+                },
+                timeout=30,
+            )
+            result = resp.json()
+            if resp.ok and result.get("ok"):
+                backup_msg_id = result["result"]["message_id"]
+                # Persist the backup copy as a separate TelegramArchive row
+                backup_archive = TelegramArchive(
+                    movie_id=archive.movie_id,
+                    episode_id=archive.episode_id,
+                    channel_id=backup_channel,
+                    message_id=backup_msg_id,
+                    telegram_file_id=archive.telegram_file_id,
+                    telegram_file_unique_id=archive.telegram_file_unique_id,
+                    file_size_bytes=archive.file_size_bytes,
+                    caption=archive.caption,
+                )
+                session.add(backup_archive)
+                session.commit()
+                logger.info(
+                    f"✅ Mirror → {backup_channel}: archive ID {archive.id} → msg {backup_msg_id} "
+                    f"(ep={archive.episode_id}, movie={archive.movie_id})"
+                )
+            else:
+                err = result.get("description", resp.text[:200])
+                logger.warning(
+                    f"⚠️ Mirror copyMessage to {backup_channel} failed (non-critical): {err}"
+                )
+        except Exception as exc:
+            logger.warning(
+                f"⚠️ Mirror to backup vault {backup_channel} raised exception (non-critical): {exc}"
+            )
+
+
 def record_telegram_archive(
     telegram_data: Dict[str, Any],
     episode_id: Optional[int] = None,
@@ -1253,6 +1359,13 @@ def record_telegram_archive(
         session.commit()
         session.refresh(archive)
         logger.info(f"Recorded TelegramArchive ID {archive.id} for episode={episode_id}, movie={movie_id}")
+
+        # ── Live Mirror to Backup Vault ──────────────────────────────────────
+        # Automatically copyMessage to backup channel after every successful archive.
+        # Uses @Riva109_bot (BACKUP_VAULT_BOT_TOKEN). Non-critical: errors are logged only.
+        _mirror_archive_to_backup(archive, session)
+        # ────────────────────────────────────────────────────────────────────
+
         return archive
 
 

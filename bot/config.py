@@ -5,6 +5,14 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID") or 0)
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 
+# Secondary Delivery / Worker Bot (Shields Primary Bot from DMCA & Bans)
+DELIVERY_BOT_TOKEN = os.getenv("DELIVERY_BOT_TOKEN", "").strip()
+_raw_deliv_user = os.getenv("DELIVERY_BOT_USERNAME", "").strip()
+if "t.me/" in _raw_deliv_user:
+    DELIVERY_BOT_USERNAME = _raw_deliv_user.split("t.me/")[-1].split("/")[0].split("?")[0].lstrip("@")
+else:
+    DELIVERY_BOT_USERNAME = _raw_deliv_user.lstrip("@")
+
 # Master Vault Channel
 TELEGRAM_CHANNEL_ID = int(os.getenv("TELEGRAM_CHANNEL_ID", "-1004466886745"))
 
